@@ -1,0 +1,8 @@
+{
+  "name": "Remix: 校园运动打卡系统 (移动端)3.5-开始完成登记",
+  "description": "移动端老师端校园运动打卡系统。包含首页运动打卡发起、刷脸添加学生、小组项目进行与进度追踪、项目管理(新建/编辑)、年级/班级统计分析与数据导出。",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": []
+}
