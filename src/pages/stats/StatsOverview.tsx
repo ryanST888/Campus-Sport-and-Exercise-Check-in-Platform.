@@ -822,10 +822,17 @@ export function StatsOverview() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#f3f5f8] pb-24">
-      <Header title="统计" showBack={false} />
+    <div className="relative flex min-h-screen flex-col overflow-hidden bg-[linear-gradient(180deg,#fbfdff_0%,#edf4fb_44%,#f8fafc_100%)] pb-24">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-[360px] bg-[linear-gradient(180deg,rgba(255,255,255,0.92)_0%,rgba(220,236,255,0.42)_48%,rgba(255,255,255,0)_100%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(128deg,rgba(255,255,255,0.5)_0%,rgba(255,255,255,0)_38%,rgba(180,215,255,0.2)_72%,rgba(255,255,255,0.34)_100%)]" />
+      <Header
+        title="统计"
+        showBack={false}
+        bg="bg-white/45 backdrop-blur-2xl border-b border-white/55 shadow-none"
+        titleClassName="text-slate-950"
+      />
 
-      <div className="space-y-4 p-4">
+      <div className="relative z-10 space-y-4 p-4">
         <LeadershipSnapshotPanel
           viewerProfiles={viewerProfiles}
           activeViewerId={viewerId}
@@ -851,7 +858,7 @@ export function StatsOverview() {
                 type="month"
                 value={statsMonth}
                 onChange={(event) => setStatsMonth(event.target.value)}
-                className="h-9 shrink-0 rounded-lg border border-gray-200 bg-gray-50 px-2 text-[12px] font-medium text-gray-700 outline-none focus:border-[#1677ff]"
+                className="h-9 shrink-0 rounded-full border border-white/70 bg-white/58 px-3 text-[12px] font-medium text-gray-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)] outline-none backdrop-blur-xl focus:border-[#1677ff]"
               />
             }
           >
@@ -871,8 +878,8 @@ export function StatsOverview() {
                   onClick={() => setViewerId(profile.id)}
                   className={`shrink-0 rounded-lg px-3 py-2 text-left text-[12px] font-semibold ${
                     viewer.id === profile.id
-                      ? "bg-gray-950 text-white"
-                      : "bg-gray-100 text-gray-600"
+                      ? "bg-slate-950/88 text-white shadow-[0_12px_24px_rgba(15,23,42,0.18),inset_0_1px_0_rgba(255,255,255,0.18)]"
+                      : "bg-white/46 text-slate-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]"
                   }`}
                 >
                   <span className="block">{profile.name}</span>
@@ -883,7 +890,7 @@ export function StatsOverview() {
               ))}
             </div>
 
-            <div className="mt-5 border-t border-gray-100 pt-4">
+            <div className="mt-5 border-t border-white/48 pt-4">
               <div className="mb-2 text-[12px] font-bold text-gray-500">
                 数据范围
               </div>
@@ -895,12 +902,12 @@ export function StatsOverview() {
                       key={option.key}
                       disabled={!allowed}
                       onClick={() => allowed && setDataScope(option.key)}
-                      className={`flex min-h-[50px] items-center justify-between rounded-lg border px-3 py-2 text-left ${
+                      className={`flex min-h-[50px] items-center justify-between rounded-2xl border px-3 py-2 text-left backdrop-blur-xl ${
                         dataScope === option.key
-                          ? "border-[#1677ff] bg-blue-50 text-[#1677ff]"
+                          ? "border-[#1677ff]/45 bg-blue-50/68 text-[#1677ff] shadow-[0_10px_24px_rgba(0,122,255,0.12),inset_0_1px_0_rgba(255,255,255,0.86)]"
                           : allowed
-                            ? "border-gray-100 bg-gray-50 text-gray-700"
-                            : "border-gray-100 bg-gray-50 text-gray-300"
+                            ? "border-white/58 bg-white/42 text-gray-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]"
+                            : "border-white/42 bg-white/28 text-gray-300"
                       }`}
                     >
                       <span className="text-[13px] font-bold">{option.label}</span>
@@ -996,14 +1003,14 @@ export function StatsOverview() {
             aside={`${targetLabel} · 分类和趋势`}
             defaultOpen={false}
           >
-            <div className="flex rounded-lg bg-gray-100 p-1">
+            <div className="flex rounded-full border border-white/58 bg-white/34 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.78)] backdrop-blur-xl">
               {trendOptions.map((option) => (
                 <button
                   key={option.key}
                   onClick={() => setTrendPeriod(option.key)}
                   className={`h-8 flex-1 rounded-md text-[13px] font-semibold ${
                     trendPeriod === option.key
-                      ? "bg-white text-[#1677ff] shadow-sm"
+                      ? "bg-white/82 text-[#1677ff] shadow-[0_10px_22px_rgba(83,105,132,0.13),inset_0_1px_0_rgba(255,255,255,0.92)]"
                       : "text-gray-500"
                   }`}
                 >
@@ -1090,7 +1097,7 @@ export function StatsOverview() {
               <LegendDot color="#f59e0b" label="有效记录" />
             </div>
 
-            <div className="mt-5 border-t border-gray-100 pt-4">
+            <div className="mt-5 border-t border-white/48 pt-4">
               <SectionTitle
                 icon={<Layers3 className="h-4 w-4" />}
                 title="分类结构"
@@ -1140,7 +1147,7 @@ export function StatsOverview() {
             />
             <div className="mt-4 space-y-3">
               {drillRows.length === 0 ? (
-                <div className="rounded-lg bg-gray-50 py-10 text-center text-[13px] text-gray-400">
+                <div className="rounded-2xl border border-white/55 bg-white/35 py-10 text-center text-[13px] text-gray-400 backdrop-blur-xl">
                   当前范围暂无统计数据
                 </div>
               ) : (
@@ -1155,7 +1162,7 @@ export function StatsOverview() {
               )}
             </div>
 
-            <div className="mt-5 border-t border-gray-100 pt-4">
+            <div className="mt-5 border-t border-white/48 pt-4">
               <SectionTitle
                 icon={<Activity className="h-4 w-4" />}
                 title="项目数据"
@@ -1163,7 +1170,7 @@ export function StatsOverview() {
               />
               <div className="mt-4 space-y-2">
                 {projectRows.length === 0 ? (
-                  <div className="rounded-lg bg-gray-50 py-8 text-center text-[13px] text-gray-400">
+                  <div className="rounded-2xl border border-white/55 bg-white/35 py-8 text-center text-[13px] text-gray-400 backdrop-blur-xl">
                     当前范围暂无项目数据
                   </div>
                 ) : (
@@ -1171,7 +1178,7 @@ export function StatsOverview() {
                     <button
                       key={project.id}
                       onClick={() => navigate(`/stats/projects/${project.id}`)}
-                      className="flex w-full items-center justify-between rounded-lg bg-gray-50 px-3 py-3 text-left active:bg-gray-100"
+                      className="flex w-full items-center justify-between rounded-2xl border border-white/55 bg-white/35 px-3 py-3 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] backdrop-blur-xl active:bg-white/55"
                     >
                       <div className="min-w-0">
                         <div className="truncate text-[14px] font-bold text-gray-900">
@@ -1756,7 +1763,7 @@ function LeadershipSnapshotPanel({
   };
 
   return (
-    <section className="overflow-hidden rounded-[32px] border border-white/80 bg-gradient-to-b from-white to-[#f5f7fb] p-4 shadow-[0_18px_45px_rgba(15,23,42,0.10)]">
+    <section className="overflow-hidden rounded-[32px] border border-white/70 bg-white/42 p-4 shadow-[0_24px_70px_rgba(83,105,132,0.18),inset_0_1px_0_rgba(255,255,255,0.88)] backdrop-blur-2xl">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
           <div className="text-[12px] font-semibold text-[#007aff]">
@@ -1766,12 +1773,12 @@ function LeadershipSnapshotPanel({
             {snapshotConfig.title}
           </h2>
         </div>
-        <div className="rounded-full border border-gray-200/80 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-gray-500 shadow-sm">
+        <div className="rounded-full border border-white/70 bg-white/50 px-3 py-1.5 text-[11px] font-semibold text-slate-500 shadow-[0_8px_24px_rgba(83,105,132,0.12),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-xl">
           {monthLabel}
         </div>
       </div>
 
-      <div className="mb-3 flex gap-2 overflow-x-auto rounded-[20px] bg-gray-100 p-1">
+      <div className="mb-3 flex gap-2 overflow-x-auto rounded-[20px] border border-white/55 bg-white/32 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur-xl">
         {viewerProfiles.map((profile) => {
           const active = profile.id === activeViewerId;
           return (
@@ -1781,8 +1788,8 @@ function LeadershipSnapshotPanel({
               onClick={() => onViewerChange(profile.id)}
               className={`shrink-0 rounded-[16px] px-3 py-2 text-left transition-colors ${
                 active
-                  ? "bg-white text-[#111827] shadow-sm"
-                  : "text-gray-500 active:bg-white/70"
+                  ? "bg-white/82 text-[#111827] shadow-[0_10px_24px_rgba(83,105,132,0.14),inset_0_1px_0_rgba(255,255,255,0.95)]"
+                  : "text-slate-500 active:bg-white/55"
               }`}
             >
               <span className="block text-[12px] font-black leading-4">
@@ -1800,14 +1807,14 @@ function LeadershipSnapshotPanel({
         {snapshotConfig.metrics.map((metric) => (
           <div
             key={metric.label}
-            className={`flex min-h-[96px] flex-col justify-between rounded-[18px] border p-2.5 text-center shadow-[0_8px_20px_rgba(15,23,42,0.06)] ${
+            className={`flex min-h-[96px] flex-col justify-between rounded-[18px] border p-2.5 text-center shadow-[0_14px_28px_rgba(83,105,132,0.10),inset_0_1px_0_rgba(255,255,255,0.78)] backdrop-blur-xl ${
               metric.tone === "green"
-                ? "border-emerald-100 bg-emerald-50 text-emerald-950"
+                ? "border-emerald-200/60 bg-emerald-50/58 text-emerald-950"
                 : metric.tone === "rose"
-                  ? "border-rose-100 bg-rose-50 text-rose-950"
+                  ? "border-rose-200/60 bg-rose-50/58 text-rose-950"
                 : metric.tone === "orange"
-                  ? "border-orange-100 bg-orange-50 text-orange-950"
-                  : "border-blue-100 bg-blue-50 text-blue-950"
+                  ? "border-orange-200/60 bg-orange-50/58 text-orange-950"
+                  : "border-blue-200/60 bg-blue-50/58 text-blue-950"
             }`}
           >
             <div className="text-[12px] font-bold leading-4">{metric.label}</div>
@@ -1837,7 +1844,7 @@ function LeadershipSnapshotPanel({
         <button
           type="button"
           onClick={onViewData}
-          className="h-12 rounded-full border border-gray-200 bg-white text-[16px] font-bold text-[#111827] shadow-[0_8px_20px_rgba(15,23,42,0.05)] active:bg-gray-50"
+          className="h-12 rounded-full border border-white/75 bg-white/85 text-[16px] font-bold text-[#111827] shadow-[0_14px_34px_rgba(83,105,132,0.14),inset_0_1px_0_rgba(255,255,255,0.95)] backdrop-blur-xl active:bg-white/95"
         >
           所有数据
         </button>
@@ -1845,7 +1852,7 @@ function LeadershipSnapshotPanel({
           type="button"
           onClick={onGenerateReport}
           disabled={isGenerating}
-          className="flex h-12 items-center justify-center gap-2 rounded-full bg-[#007aff] text-[15px] font-bold text-white shadow-[0_12px_28px_rgba(0,122,255,0.28)] active:bg-[#006edc] disabled:opacity-70"
+          className="flex h-12 items-center justify-center gap-2 rounded-full border border-white/30 bg-[linear-gradient(135deg,rgba(0,122,255,0.96),rgba(64,156,255,0.9))] text-[15px] font-bold text-white shadow-[0_18px_34px_rgba(0,122,255,0.32),inset_0_1px_0_rgba(255,255,255,0.45)] active:bg-[#006edc] disabled:opacity-70"
         >
           {isGenerating ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -1856,7 +1863,7 @@ function LeadershipSnapshotPanel({
         </button>
       </div>
 
-      <div className="mt-3 flex min-h-[330px] flex-col rounded-[26px] border border-gray-200/80 bg-[#f5f5f7] p-4 shadow-inner">
+      <div className="mt-3 flex min-h-[330px] flex-col rounded-[26px] border border-white/75 bg-white/80 p-4 shadow-[inset_0_1px_1px_rgba(255,255,255,0.86),0_18px_48px_rgba(83,105,132,0.16)] backdrop-blur-2xl">
         <div className="text-center text-[16px] font-black text-[#111827]">
           AI交互界面
         </div>
@@ -1872,8 +1879,8 @@ function LeadershipSnapshotPanel({
               <div
                 className={`max-w-[88%] whitespace-pre-wrap rounded-[22px] px-4 py-3 text-[13px] leading-6 shadow-sm ${
                   message.role === "user"
-                    ? "bg-[#007aff] text-white"
-                    : "bg-white text-[#111827]"
+                    ? "bg-[#007aff]/90 text-white shadow-[0_12px_26px_rgba(0,122,255,0.22)]"
+                    : "border border-white/80 bg-white/90 text-[#111827] backdrop-blur-xl"
                 }`}
               >
                 {message.role === "assistant" && message.source && (
@@ -1896,7 +1903,7 @@ function LeadershipSnapshotPanel({
                         className={`flex items-center gap-2 rounded-2xl px-3 py-2 text-[11px] font-semibold ${
                           message.role === "user"
                             ? "bg-white/15 text-white"
-                            : "bg-gray-100 text-gray-600"
+                            : "bg-white/80 text-slate-700"
                         }`}
                       >
                         <Paperclip className="h-3.5 w-3.5 shrink-0" />
@@ -1916,7 +1923,7 @@ function LeadershipSnapshotPanel({
 
           {aiBusy && (
             <div className="flex justify-start">
-              <div className="flex max-w-[88%] items-center gap-2 rounded-[22px] bg-white px-4 py-3 text-[13px] font-semibold text-[#111827] shadow-sm">
+              <div className="flex max-w-[88%] items-center gap-2 rounded-[22px] border border-white/80 bg-white/90 px-4 py-3 text-[13px] font-semibold text-[#111827] shadow-[0_10px_26px_rgba(83,105,132,0.12)] backdrop-blur-xl">
                 <Loader2 className="h-4 w-4 animate-spin text-[#007aff]" />
                 正在结合当前统计数据生成建议...
               </div>
@@ -1929,7 +1936,7 @@ function LeadershipSnapshotPanel({
             {attachments.map((attachment) => (
               <div
                 key={attachment.id}
-                className="flex max-w-[220px] shrink-0 items-center gap-2 rounded-2xl border border-gray-200 bg-white px-3 py-2 text-[12px] font-semibold text-gray-700 shadow-sm"
+                className="flex max-w-[220px] shrink-0 items-center gap-2 rounded-2xl border border-white/80 bg-white/90 px-3 py-2 text-[12px] font-semibold text-gray-800 shadow-[0_10px_24px_rgba(83,105,132,0.12)] backdrop-blur-xl"
               >
                 {attachment.kind === "image" ? (
                   <ImageIcon className="h-4 w-4 shrink-0 text-[#007aff]" />
@@ -1944,7 +1951,7 @@ function LeadershipSnapshotPanel({
                 <button
                   type="button"
                   onClick={() => handleRemoveAttachment(attachment.id)}
-                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-500 active:bg-gray-200"
+                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/85 text-gray-600 active:bg-white"
                   aria-label="移除附件"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
@@ -1995,56 +2002,72 @@ function LeadershipSnapshotPanel({
           onChange={(event) => handleAttachmentPick(event, "file")}
         />
 
-        <div className="relative mt-3 flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-2 shadow-[0_10px_28px_rgba(15,23,42,0.08)]">
+        <div className="relative mt-3 flex items-center gap-2 rounded-full border border-white/80 bg-white/90 px-3 py-2 shadow-[0_16px_34px_rgba(83,105,132,0.18),inset_0_1px_0_rgba(255,255,255,0.92)] backdrop-blur-xl">
           {isUploadMenuOpen && (
-            <div className="absolute bottom-[54px] left-1 z-20 grid w-[184px] gap-1 rounded-2xl border border-gray-200 bg-white p-2 text-[13px] font-semibold text-gray-700 shadow-[0_16px_38px_rgba(15,23,42,0.16)]">
+            <div className="absolute bottom-[58px] left-1/2 z-20 w-[min(320px,calc(100vw-64px))] -translate-x-1/2 rounded-[28px] border border-white/90 bg-white/95 p-2.5 shadow-[0_22px_54px_rgba(83,105,132,0.30),inset_0_1px_0_rgba(255,255,255,0.96)] backdrop-blur-2xl">
+              <div className="mb-2 flex items-center justify-between px-1">
+                <span className="text-[11px] font-black text-slate-600">添加素材</span>
+                <span className="text-[10px] font-semibold text-slate-400">用于 AI 分析</span>
+              </div>
+              <div className="grid grid-cols-5 gap-1.5">
               <button
                 type="button"
                 onClick={() => cameraInputRef.current?.click()}
-                className="flex h-10 items-center gap-2 rounded-xl px-3 text-left active:bg-blue-50"
+                className="flex min-h-[62px] flex-col items-center justify-center gap-1 rounded-[18px] border border-white/80 bg-white/90 px-1 text-center text-[10px] font-bold text-slate-800 shadow-[inset_0_1px_0_rgba(255,255,255,0.88)] active:bg-blue-50"
               >
-                <Camera className="h-4 w-4 text-[#007aff]" />
-                拍照上传
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#007aff]/10 text-[#007aff]">
+                  <Camera className="h-4 w-4" />
+                </span>
+                拍照
               </button>
               <button
                 type="button"
                 onClick={() => imageInputRef.current?.click()}
-                className="flex h-10 items-center gap-2 rounded-xl px-3 text-left active:bg-blue-50"
+                className="flex min-h-[62px] flex-col items-center justify-center gap-1 rounded-[18px] border border-white/80 bg-white/90 px-1 text-center text-[10px] font-bold text-slate-800 shadow-[inset_0_1px_0_rgba(255,255,255,0.88)] active:bg-blue-50"
               >
-                <ImageIcon className="h-4 w-4 text-[#007aff]" />
-                上传图片
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#007aff]/10 text-[#007aff]">
+                  <ImageIcon className="h-4 w-4" />
+                </span>
+                图片
               </button>
               <button
                 type="button"
                 onClick={() => videoInputRef.current?.click()}
-                className="flex h-10 items-center gap-2 rounded-xl px-3 text-left active:bg-orange-50"
+                className="flex min-h-[62px] flex-col items-center justify-center gap-1 rounded-[18px] border border-white/80 bg-white/90 px-1 text-center text-[10px] font-bold text-slate-800 shadow-[inset_0_1px_0_rgba(255,255,255,0.88)] active:bg-orange-50"
               >
-                <Video className="h-4 w-4 text-[#ff9500]" />
-                上传视频
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#ff9500]/12 text-[#ff9500]">
+                  <Video className="h-4 w-4" />
+                </span>
+                视频
               </button>
               <button
                 type="button"
                 onClick={() => audioInputRef.current?.click()}
-                className="flex h-10 items-center gap-2 rounded-xl px-3 text-left active:bg-emerald-50"
+                className="flex min-h-[62px] flex-col items-center justify-center gap-1 rounded-[18px] border border-white/80 bg-white/90 px-1 text-center text-[10px] font-bold text-slate-800 shadow-[inset_0_1px_0_rgba(255,255,255,0.88)] active:bg-emerald-50"
               >
-                <Mic className="h-4 w-4 text-[#34c759]" />
-                上传音频
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#34c759]/12 text-[#34c759]">
+                  <Mic className="h-4 w-4" />
+                </span>
+                音频
               </button>
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="flex h-10 items-center gap-2 rounded-xl px-3 text-left active:bg-gray-50"
+                className="flex min-h-[62px] flex-col items-center justify-center gap-1 rounded-[18px] border border-white/80 bg-white/90 px-1 text-center text-[10px] font-bold text-slate-800 shadow-[inset_0_1px_0_rgba(255,255,255,0.88)] active:bg-slate-50"
               >
-                <Paperclip className="h-4 w-4 text-gray-500" />
-                上传文件
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900/8 text-slate-500">
+                  <Paperclip className="h-4 w-4" />
+                </span>
+                文件
               </button>
+              </div>
             </div>
           )}
           <button
             type="button"
             onClick={() => setIsUploadMenuOpen((current) => !current)}
             disabled={aiBusy}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-600 shadow-sm active:bg-gray-200 disabled:opacity-70"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/90 text-gray-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.92)] active:bg-white disabled:opacity-70"
             aria-label="打开上传菜单"
           >
             <Plus className={`h-4 w-4 transition-transform ${isUploadMenuOpen ? "rotate-45" : ""}`} />
@@ -2065,7 +2088,7 @@ function LeadershipSnapshotPanel({
             className={`flex min-w-0 flex-1 select-none items-center gap-2 rounded-full px-1 transition-colors ${
               isListening
                 ? "bg-[#ff3b30]/10 text-[#ff3b30]"
-                : "text-gray-500 active:bg-gray-50"
+                : "text-gray-500 active:bg-white/45"
             }`}
             aria-label="短按输入文字，长按语音输入"
           >
@@ -2095,7 +2118,7 @@ function LeadershipSnapshotPanel({
             type="button"
             onClick={handleAiSubmit}
             disabled={aiBusy}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#007aff] text-white shadow-sm disabled:opacity-70"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#007aff] text-white shadow-[0_8px_18px_rgba(0,122,255,0.28),inset_0_1px_0_rgba(255,255,255,0.42)] disabled:opacity-70"
             aria-label="发送AI追问"
           >
             {aiBusy ? (
@@ -3434,18 +3457,18 @@ function TopLevelAnalyticsPanel({
   if (!activeCategory) return null;
 
   return (
-    <div className="mt-5 border-t border-gray-100 pt-4">
-      <div className="rounded-lg bg-gray-950 p-4 text-white">
+    <div className="mt-5 border-t border-white/48 pt-4">
+      <div className="rounded-[24px] border border-white/62 bg-[linear-gradient(135deg,rgba(255,255,255,0.78),rgba(225,239,255,0.46))] p-4 text-slate-950 shadow-[0_18px_44px_rgba(83,105,132,0.14),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-2xl">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <div className="text-[12px] font-medium text-blue-100">
+              <div className="text-[12px] font-medium text-[#1677ff]">
                 Top level 全域管理驾驶舱
               </div>
               <button
                 type="button"
                 onClick={() => setShowGuide(true)}
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/10 text-blue-100 active:bg-white/20"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/65 bg-white/54 text-[#1677ff] shadow-[inset_0_1px_0_rgba(255,255,255,0.85)] active:bg-white/72"
                 aria-label="查看采集说明"
               >
                 <HelpCircle className="h-4 w-4" />
@@ -3454,33 +3477,33 @@ function TopLevelAnalyticsPanel({
             <h2 className="mt-1 text-[22px] font-bold leading-tight">
               12 大类指标与指数数据
             </h2>
-            <p className="mt-1 text-[12px] leading-5 text-gray-300">
+            <p className="mt-1 text-[12px] leading-5 text-slate-500">
               只对校长/体育主管开放，覆盖运动、作业、成绩、睡眠、心理、家庭和环境。
             </p>
           </div>
-          <div className="shrink-0 rounded-lg bg-white px-3 py-2 text-right text-gray-950">
+          <div className="shrink-0 rounded-2xl border border-white/68 bg-white/62 px-3 py-2 text-right text-gray-950 shadow-[0_12px_28px_rgba(83,105,132,0.14),inset_0_1px_0_rgba(255,255,255,0.92)] backdrop-blur-xl">
             <div className="text-[24px] font-bold leading-none">{averageScore}</div>
             <div className="mt-0.5 text-[10px] text-gray-500">综合均值</div>
           </div>
         </div>
 
         <div className="mt-4 grid grid-cols-3 gap-2 text-[11px]">
-          <div className="flex min-w-0 items-center gap-1.5 rounded-lg bg-white/10 px-2 py-2">
-            <HeartPulse className="h-3.5 w-3.5 shrink-0 text-blue-200" />
+          <div className="flex min-w-0 items-center gap-1.5 rounded-2xl border border-white/56 bg-white/46 px-2 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.76)]">
+            <HeartPulse className="h-3.5 w-3.5 shrink-0 text-[#1677ff]" />
             <span className="truncate">{categories.length}类</span>
           </div>
-          <div className="flex min-w-0 items-center gap-1.5 rounded-lg bg-white/10 px-2 py-2">
-            <BarChart3 className="h-3.5 w-3.5 shrink-0 text-blue-200" />
+          <div className="flex min-w-0 items-center gap-1.5 rounded-2xl border border-white/56 bg-white/46 px-2 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.76)]">
+            <BarChart3 className="h-3.5 w-3.5 shrink-0 text-[#1677ff]" />
             <span className="truncate">{metricCount}项</span>
           </div>
-          <div className="flex min-w-0 items-center gap-1.5 rounded-lg bg-white/10 px-2 py-2">
-            <Timer className="h-3.5 w-3.5 shrink-0 text-blue-200" />
+          <div className="flex min-w-0 items-center gap-1.5 rounded-2xl border border-white/56 bg-white/46 px-2 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.76)]">
+            <Timer className="h-3.5 w-3.5 shrink-0 text-[#1677ff]" />
             <span className="truncate">{getMonthLabel(statsMonth)}</span>
           </div>
         </div>
       </div>
 
-      <div className="mt-4 rounded-lg bg-gray-50 p-3">
+      <div className="mt-4 rounded-[22px] border border-white/58 bg-white/36 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] backdrop-blur-xl">
         <div className="mb-2 flex items-end justify-between gap-3">
           <div>
             <div className="text-[12px] font-medium text-gray-500">
@@ -3499,7 +3522,7 @@ function TopLevelAnalyticsPanel({
             aria-label="选择指标类"
             value={activeIndex}
             onChange={(event) => setActiveIndex(Number(event.target.value))}
-            className="h-11 w-full appearance-none rounded-lg border border-gray-200 bg-white pl-3 pr-9 text-[14px] font-bold text-gray-950 outline-none focus:border-[#1677ff]"
+            className="h-11 w-full appearance-none rounded-2xl border border-white/70 bg-white/62 pl-3 pr-9 text-[14px] font-bold text-gray-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.86)] outline-none backdrop-blur-xl focus:border-[#1677ff]"
           >
             {categories.map((category, index) => (
               <option key={category.id} value={index}>
@@ -3637,7 +3660,7 @@ function TopAnalyticsCard({ category }: { category: TopAnalyticsCategory }) {
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-[#1677ff]">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border border-white/60 bg-white/50 text-[#1677ff] shadow-[inset_0_1px_0_rgba(255,255,255,0.82)]">
               {category.icon}
             </div>
             <h3 className="min-w-0 text-[15px] font-bold leading-5 text-gray-950">
@@ -3671,7 +3694,7 @@ function TopAnalyticsCard({ category }: { category: TopAnalyticsCategory }) {
 
 function MetricChip({ item }: { item: TopMetric }) {
   return (
-    <div className="min-w-0 rounded-lg bg-gray-50 px-2 py-2">
+    <div className="min-w-0 rounded-2xl border border-white/58 bg-white/38 px-2 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur-xl">
       <div className="flex items-start justify-between gap-1.5">
         <span className="min-w-0 text-[11px] font-medium leading-4 text-gray-500">
           {item.name}
@@ -3750,8 +3773,10 @@ function SelectorRow({
           <button
             key={item}
             onClick={() => onChange(item)}
-            className={`shrink-0 rounded-lg px-3 py-2 text-[13px] font-semibold ${
-              value === item ? "bg-gray-950 text-white" : "bg-gray-100 text-gray-600"
+            className={`shrink-0 rounded-2xl px-3 py-2 text-[13px] font-semibold backdrop-blur-xl ${
+              value === item
+                ? "bg-slate-950/88 text-white shadow-[0_12px_24px_rgba(15,23,42,0.18),inset_0_1px_0_rgba(255,255,255,0.18)]"
+                : "bg-white/44 text-gray-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]"
             }`}
           >
             {getLabel(item)}
@@ -3776,15 +3801,15 @@ function KpiCard({
   tone: "blue" | "green" | "amber" | "rose";
 }) {
   const toneClass = {
-    blue: "bg-blue-50 text-blue-600",
-    green: "bg-emerald-50 text-emerald-600",
-    amber: "bg-amber-50 text-amber-600",
-    rose: "bg-rose-50 text-rose-600",
+    blue: "bg-blue-50/70 text-blue-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]",
+    green: "bg-emerald-50/70 text-emerald-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]",
+    amber: "bg-amber-50/70 text-amber-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]",
+    rose: "bg-rose-50/70 text-rose-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]",
   }[tone];
 
   return (
-    <div className="rounded-lg bg-gray-50 p-3">
-      <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${toneClass}`}>
+    <div className="rounded-[22px] border border-white/58 bg-white/38 p-3 shadow-[0_12px_28px_rgba(83,105,132,0.10),inset_0_1px_0_rgba(255,255,255,0.75)] backdrop-blur-xl">
+      <div className={`flex h-8 w-8 items-center justify-center rounded-2xl ${toneClass}`}>
         {icon}
       </div>
       <div className="mt-3 text-[12px] font-medium text-gray-500">{label}</div>
@@ -3826,10 +3851,13 @@ function CollapsibleStatsSection({
   }, [forceOpenSignal]);
 
   return (
-    <section id={id} className="rounded-lg border border-gray-100 bg-white p-4 shadow-sm">
+    <section
+      id={id}
+      className="rounded-[24px] border border-white/64 bg-white/42 p-4 shadow-[0_16px_42px_rgba(83,105,132,0.13),inset_0_1px_0_rgba(255,255,255,0.86)] backdrop-blur-2xl"
+    >
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-[#1677ff]">
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border border-white/62 bg-white/52 text-[#1677ff] shadow-[inset_0_1px_0_rgba(255,255,255,0.82)]">
             {icon}
           </div>
           <div className="min-w-0">
@@ -3851,7 +3879,7 @@ function CollapsibleStatsSection({
             onClick={() => setOpen((value) => !value)}
             aria-expanded={open}
             aria-label={open ? "收起板块" : "展开板块"}
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-gray-500 transition active:bg-gray-200"
+            className="flex h-8 w-8 items-center justify-center rounded-full border border-white/62 bg-white/48 text-gray-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.82)] transition backdrop-blur-xl active:bg-white/70"
           >
             <ChevronDown
               className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`}
@@ -3877,7 +3905,7 @@ function SectionTitle({
   return (
     <div className="flex items-center justify-between gap-3">
       <div className="flex items-center gap-2">
-        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 text-[#1677ff]">
+        <div className="flex h-7 w-7 items-center justify-center rounded-xl border border-white/62 bg-white/52 text-[#1677ff] shadow-[inset_0_1px_0_rgba(255,255,255,0.82)]">
           {icon}
         </div>
         <h2 className="text-[16px] font-bold text-gray-950">{title}</h2>
@@ -3919,8 +3947,8 @@ function ProgressRow({
         <span className="font-semibold text-gray-800">{label}</span>
         <span className="font-bold text-gray-950">{value}次</span>
       </div>
-      <div className="mt-2 h-2 overflow-hidden rounded-full bg-gray-100">
-        <div className="h-full rounded-full bg-[#1677ff]" style={{ width: `${width}%` }} />
+      <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/56 shadow-[inset_0_1px_2px_rgba(83,105,132,0.16)]">
+        <div className="h-full rounded-full bg-[linear-gradient(90deg,#1677ff,#66b7ff)]" style={{ width: `${width}%` }} />
       </div>
       <div className="mt-1 text-[11px] text-gray-400">{helper}</div>
     </div>
@@ -3948,7 +3976,7 @@ function DrillRow({
 
   return (
     <div className="grid grid-cols-[32px_1fr_64px] items-center gap-3">
-      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-[13px] font-bold text-[#1677ff]">
+      <div className="flex h-8 w-8 items-center justify-center rounded-2xl border border-white/60 bg-white/50 text-[13px] font-bold text-[#1677ff] shadow-[inset_0_1px_0_rgba(255,255,255,0.78)]">
         {rank}
       </div>
       <div className="min-w-0">
@@ -3963,8 +3991,8 @@ function DrillRow({
           )}
         </div>
         {!isProject && (
-          <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-gray-100">
-            <div className="h-full rounded-full bg-emerald-500" style={{ width: `${rate}%` }} />
+          <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-white/56 shadow-[inset_0_1px_2px_rgba(83,105,132,0.16)]">
+            <div className="h-full rounded-full bg-[linear-gradient(90deg,#10b981,#6ee7b7)]" style={{ width: `${rate}%` }} />
           </div>
         )}
         <div className="mt-1 text-[10px] text-gray-400">{subLabel}</div>

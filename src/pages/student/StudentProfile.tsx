@@ -39,6 +39,7 @@ import {
 
 const WEEK_TARGET = 5;
 const STUDENT_THEME_STORAGE_KEY = "student-profile-theme";
+const STUDENT_THEME_CHANGED_EVENT = "student-profile-theme-change";
 const STUDENT_GOAL_STORAGE_KEY = "student-profile-goal";
 const DEFAULT_STUDENT_GOAL: StudentGoal = {
   title: "本周主动加练",
@@ -84,24 +85,24 @@ function getInitialStudentGoal(): StudentGoal {
 
 const studentThemeStyles = {
   dark: {
-    page: "flex min-h-screen flex-col bg-[#050506] pb-24 text-white",
-    headerBg: "bg-[#050506]",
+    page: "relative flex min-h-screen flex-col overflow-hidden bg-[#070b16] pb-24 text-white",
+    headerBg: "border-b border-white/10 bg-[#07101f]/55 backdrop-blur-2xl",
     headerTitle: "text-white",
     headerIcon: "text-white active:bg-white/10",
-    settingsButton: "text-white/75 active:bg-white/10",
-    card: "rounded-[24px] bg-[#1c1d21] p-4 shadow-sm",
-    splitCard: "rounded-[22px] bg-[#1c1d21] p-4 shadow-sm",
-    quietPanel: "rounded-2xl bg-white/[0.06] px-3 py-2 text-[13px] leading-5 text-white/70",
+    settingsButton: "border border-white/15 bg-white/10 text-white/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.22)] backdrop-blur-xl active:bg-white/15",
+    card: "relative overflow-hidden rounded-[30px] border border-white/15 bg-white/[0.08] p-4 shadow-[0_24px_70px_rgba(0,0,0,0.38),inset_0_1px_0_rgba(255,255,255,0.18)] backdrop-blur-2xl before:pointer-events-none before:absolute before:inset-x-5 before:top-0 before:h-px before:bg-white/35",
+    splitCard: "relative overflow-hidden rounded-[28px] border border-white/15 bg-white/[0.08] p-4 shadow-[0_20px_55px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.18)] backdrop-blur-2xl",
+    quietPanel: "rounded-[20px] border border-white/10 bg-white/[0.08] px-3 py-2 text-[13px] leading-5 text-white/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-xl",
     mutedText: "text-white/55",
     softText: "text-white/65",
     faintText: "text-white/40",
     titleText: "text-white",
     input:
-      "h-9 w-[116px] rounded-full border border-white/10 bg-white/10 pl-8 pr-2 text-[12px] font-medium text-white outline-none",
+      "h-9 w-[116px] rounded-full border border-white/15 bg-white/10 pl-8 pr-2 text-[12px] font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.16)] outline-none backdrop-blur-xl",
     inputIcon: "text-white/60",
     actionButton:
-      "flex flex-col items-center justify-center rounded-[22px] bg-lime-300 px-3 text-[#071006] shadow-sm active:bg-lime-400",
-    actionAccent: "text-lime-300",
+      "flex flex-col items-center justify-center rounded-[22px] border border-lime-200/55 bg-lime-300/85 px-3 text-[#071006] shadow-[0_18px_36px_rgba(190,242,100,0.22),inset_0_1px_0_rgba(255,255,255,0.65)] backdrop-blur-xl active:bg-lime-300",
+    actionAccent: "text-cyan-200",
     divider: "divide-y divide-white/10",
     empty: "py-8 text-center text-[14px] text-white/35",
     listTitle: "truncate text-[14px] font-bold text-white",
@@ -111,25 +112,25 @@ const studentThemeStyles = {
     unitText: "ml-1 text-[11px] font-medium text-white/40",
   },
   light: {
-    page: "flex min-h-screen flex-col bg-[#f5f7fb] pb-24 text-gray-950",
-    headerBg: "bg-[#f5f7fb]",
-    headerTitle: "text-gray-950",
-    headerIcon: "text-gray-700 active:bg-gray-100",
-    settingsButton: "text-gray-700 active:bg-gray-100",
-    card: "rounded-[24px] border border-gray-100 bg-white p-4 shadow-sm",
-    splitCard: "rounded-[22px] border border-gray-100 bg-white p-4 shadow-sm",
-    quietPanel: "rounded-2xl bg-blue-50 px-3 py-2 text-[13px] leading-5 text-slate-600",
+    page: "relative flex min-h-screen flex-col overflow-hidden bg-[#eef5ff] pb-24 text-slate-950",
+    headerBg: "border-b border-white/45 bg-white/40 backdrop-blur-2xl",
+    headerTitle: "text-[#142033]",
+    headerIcon: "text-slate-700 active:bg-white/45",
+    settingsButton: "border border-white/60 bg-white/45 text-slate-700 shadow-[0_8px_22px_rgba(55,93,142,0.12),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-xl active:bg-white/65",
+    card: "relative overflow-hidden rounded-[30px] border border-white/60 bg-white/45 p-4 shadow-[0_24px_70px_rgba(79,112,154,0.18),inset_0_1px_0_rgba(255,255,255,0.95)] backdrop-blur-2xl before:pointer-events-none before:absolute before:inset-x-5 before:top-0 before:h-px before:bg-white/95",
+    splitCard: "relative overflow-hidden rounded-[28px] border border-white/60 bg-white/45 p-4 shadow-[0_20px_55px_rgba(79,112,154,0.16),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-2xl",
+    quietPanel: "rounded-[20px] border border-white/55 bg-white/40 px-3 py-2 text-[13px] leading-5 text-slate-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)] backdrop-blur-xl",
     mutedText: "text-slate-500",
     softText: "text-slate-600",
     faintText: "text-slate-400",
     titleText: "text-gray-950",
     input:
-      "h-9 w-[116px] rounded-full border border-gray-200 bg-gray-50 pl-8 pr-2 text-[12px] font-medium text-gray-900 outline-none",
+      "h-9 w-[116px] rounded-full border border-white/70 bg-white/45 pl-8 pr-2 text-[12px] font-medium text-gray-900 shadow-[0_8px_22px_rgba(55,93,142,0.08),inset_0_1px_0_rgba(255,255,255,0.95)] outline-none backdrop-blur-xl",
     inputIcon: "text-slate-400",
     actionButton:
-      "flex flex-col items-center justify-center rounded-[22px] bg-[#1677ff] px-3 text-white shadow-sm active:bg-[#0958d9]",
-    actionAccent: "text-[#1677ff]",
-    divider: "divide-y divide-gray-100",
+      "flex flex-col items-center justify-center rounded-[22px] border border-white/50 bg-[#1677ff]/90 px-3 text-white shadow-[0_18px_38px_rgba(22,119,255,0.28),inset_0_1px_0_rgba(255,255,255,0.55)] backdrop-blur-xl active:bg-[#1677ff]",
+    actionAccent: "text-[#0b73ff]",
+    divider: "divide-y divide-white/55",
     empty: "py-8 text-center text-[14px] text-gray-400",
     listTitle: "truncate text-[14px] font-bold text-gray-950",
     listMeta: "mt-1 text-[11px] text-gray-400",
@@ -332,6 +333,7 @@ export function StudentProfile() {
     setStudentThemeState(nextTheme);
     if (typeof window !== "undefined") {
       window.localStorage.setItem(STUDENT_THEME_STORAGE_KEY, nextTheme);
+      window.dispatchEvent(new Event(STUDENT_THEME_CHANGED_EVENT));
     }
   };
 
@@ -738,6 +740,7 @@ export function StudentProfile() {
 
   return (
     <div className={theme.page}>
+      <LiquidGlassBackdrop theme={studentTheme} />
       <Header
         title="孩子运动"
         showBack={false}
@@ -755,8 +758,10 @@ export function StudentProfile() {
         }
       />
 
-      <div className="space-y-4 p-4">
-        <section className={`overflow-hidden ${theme.card}`}>
+      <div className="relative z-10 space-y-4 p-4">
+        <section className={`${theme.card} isolate`}>
+          <div className="pointer-events-none absolute -right-16 -top-20 -z-10 h-48 w-48 rounded-full bg-cyan-300/25 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-20 left-10 -z-10 h-40 w-40 rounded-full bg-rose-200/25 blur-3xl" />
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className={`text-[13px] ${theme.mutedText}`}>
@@ -978,6 +983,37 @@ type NextRecommendation = {
 
 type ParentDetailTab = "peer" | "highlights" | "best" | "recent";
 
+function LiquidGlassBackdrop({ theme }: { theme: StudentTheme }) {
+  const isLight = theme === "light";
+
+  return (
+    <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
+      <div
+        className={`absolute -top-28 left-[-72px] h-72 w-72 rounded-full blur-3xl ${
+          isLight ? "bg-sky-300/35" : "bg-cyan-400/15"
+        }`}
+      />
+      <div
+        className={`absolute right-[-96px] top-24 h-80 w-80 rounded-full blur-3xl ${
+          isLight ? "bg-rose-200/45" : "bg-fuchsia-500/15"
+        }`}
+      />
+      <div
+        className={`absolute bottom-10 left-16 h-72 w-72 rounded-full blur-3xl ${
+          isLight ? "bg-emerald-200/40" : "bg-blue-500/10"
+        }`}
+      />
+      <div
+        className={`absolute inset-0 ${
+          isLight
+            ? "bg-[linear-gradient(180deg,rgba(255,255,255,0.50),rgba(255,255,255,0.20)_46%,rgba(235,244,255,0.56))]"
+            : "bg-[linear-gradient(180deg,rgba(7,16,31,0.62),rgba(7,11,22,0.30)_48%,rgba(7,11,22,0.82))]"
+        }`}
+      />
+    </div>
+  );
+}
+
 function ParentKpiCard({
   label,
   value,
@@ -994,20 +1030,20 @@ function ParentKpiCard({
   const isLight = theme === "light";
   const toneClass = isLight
     ? {
-        blue: "bg-blue-50 text-[#1677ff]",
-        green: "bg-emerald-50 text-emerald-600",
-        orange: "bg-orange-50 text-orange-600",
-        pink: "bg-rose-50 text-rose-500",
+        blue: "border-sky-200/55 bg-sky-100/40 text-[#0b73ff]",
+        green: "border-emerald-200/55 bg-emerald-100/40 text-emerald-600",
+        orange: "border-orange-200/55 bg-orange-100/40 text-orange-600",
+        pink: "border-rose-200/55 bg-rose-100/40 text-rose-500",
       }[tone]
     : {
-        blue: "bg-sky-300/10 text-sky-300",
-        green: "bg-lime-300/10 text-lime-300",
-        orange: "bg-orange-300/10 text-orange-300",
-        pink: "bg-rose-300/10 text-rose-300",
+        blue: "border-sky-200/15 bg-sky-300/10 text-sky-300",
+        green: "border-lime-200/15 bg-lime-300/10 text-lime-300",
+        orange: "border-orange-200/15 bg-orange-300/10 text-orange-300",
+        pink: "border-rose-200/15 bg-rose-300/10 text-rose-300",
       }[tone];
 
   return (
-    <div className={`min-w-0 rounded-[18px] px-3 py-3 text-center ${toneClass}`}>
+    <div className={`min-w-0 rounded-[22px] border px-3 py-3 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] backdrop-blur-xl ${toneClass}`}>
       <div className="truncate text-[11px] font-bold opacity-75">{label}</div>
       <div className="mt-2 truncate text-[20px] font-black leading-none">{value}</div>
       <div className="mt-1 truncate text-[10px] font-medium opacity-70">{helper}</div>
@@ -1031,13 +1067,13 @@ function FamilyActionCard({
 
   return (
     <div
-      className={`grid grid-cols-[38px_1fr] gap-3 rounded-[20px] p-3 ${
-        isLight ? "bg-gray-50" : "bg-white/[0.06]"
+      className={`grid grid-cols-[38px_1fr] gap-3 rounded-[22px] border p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.66)] backdrop-blur-xl ${
+        isLight ? "border-white/60 bg-white/35" : "border-white/10 bg-white/[0.06]"
       }`}
     >
       <div
-        className={`flex h-9 w-9 items-center justify-center rounded-2xl ${
-          isLight ? "bg-white text-[#1677ff]" : "bg-white/10 text-lime-300"
+        className={`flex h-9 w-9 items-center justify-center rounded-2xl border shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] ${
+          isLight ? "border-white/65 bg-white/55 text-[#1677ff]" : "border-white/10 bg-white/10 text-cyan-200"
         }`}
       >
         {icon}
@@ -1088,11 +1124,11 @@ function ParentActionBlock({
           className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-bold ${
             nextRecommendation.isComplete
               ? isLight
-                ? "bg-emerald-50 text-emerald-600"
-                : "bg-lime-300/10 text-lime-300"
+                ? "border border-emerald-200/55 bg-emerald-100/40 text-emerald-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] backdrop-blur-xl"
+                : "border border-lime-200/15 bg-lime-300/10 text-lime-300 backdrop-blur-xl"
               : isLight
-                ? "bg-orange-50 text-orange-600"
-                : "bg-orange-300/10 text-orange-300"
+                ? "border border-orange-200/55 bg-orange-100/40 text-orange-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] backdrop-blur-xl"
+                : "border border-orange-200/15 bg-orange-300/10 text-orange-300 backdrop-blur-xl"
           }`}
         >
           {nextRecommendation.isComplete ? "放心保持" : "优先做这件事"}
@@ -1100,12 +1136,13 @@ function ParentActionBlock({
       </div>
 
       <div
-        className={`mt-4 rounded-[24px] p-4 ${
+        className={`relative mt-4 overflow-hidden rounded-[26px] border p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.78)] backdrop-blur-xl ${
           isLight
-            ? "bg-gradient-to-br from-blue-50 to-white"
-            : "bg-gradient-to-br from-white/[0.1] to-white/[0.04]"
+            ? "border-white/60 bg-white/40"
+            : "border-white/10 bg-white/[0.07]"
         }`}
       >
+        <div className="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-sky-300/25 blur-2xl" />
         <div className={`text-[12px] font-bold ${themeStyles.mutedText}`}>
           下一步建议
         </div>
@@ -1116,7 +1153,7 @@ function ParentActionBlock({
           {nextRecommendation.helper}
         </div>
         <div className={`mt-3 rounded-2xl px-3 py-2 text-[12px] leading-5 ${
-          isLight ? "bg-white text-slate-600" : "bg-black/10 text-white/65"
+          isLight ? "border border-white/55 bg-white/40 text-slate-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur-xl" : "border border-white/10 bg-white/[0.06] text-white/65 backdrop-blur-xl"
         }`}>
           推荐原因：{reason}
         </div>
@@ -1126,11 +1163,11 @@ function ParentActionBlock({
           className={`mt-4 inline-flex h-10 items-center justify-center gap-2 rounded-full px-4 text-[13px] font-bold transition-colors ${
             nextRecommendation.isComplete
               ? isLight
-                ? "bg-emerald-50 text-emerald-600"
-                : "bg-lime-300/10 text-lime-300"
+                ? "border border-emerald-200/55 bg-emerald-100/45 text-emerald-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]"
+                : "border border-lime-200/15 bg-lime-300/10 text-lime-300"
               : isLight
-                ? "bg-[#1677ff] text-white active:bg-[#0958d9]"
-                : "bg-lime-300 text-[#071006] active:bg-lime-400"
+                ? "border border-white/50 bg-[#1677ff]/90 text-white shadow-[0_18px_38px_rgba(22,119,255,0.28),inset_0_1px_0_rgba(255,255,255,0.55)] backdrop-blur-xl active:bg-[#1677ff]"
+                : "border border-lime-200/55 bg-lime-300/85 text-[#071006] shadow-[0_18px_36px_rgba(190,242,100,0.22),inset_0_1px_0_rgba(255,255,255,0.65)] backdrop-blur-xl active:bg-lime-300"
           }`}
         >
           {nextRecommendation.isComplete ? (
@@ -1222,11 +1259,11 @@ function ParentWeeklySummaryBlock({
           className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-bold ${
             weekLeft > 0
               ? isLight
-                ? "bg-orange-50 text-orange-600"
-                : "bg-orange-300/10 text-orange-300"
+                ? "border border-orange-200/55 bg-orange-100/40 text-orange-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] backdrop-blur-xl"
+                : "border border-orange-200/15 bg-orange-300/10 text-orange-300 backdrop-blur-xl"
               : isLight
-                ? "bg-emerald-50 text-emerald-600"
-                : "bg-lime-300/10 text-lime-300"
+                ? "border border-emerald-200/55 bg-emerald-100/40 text-emerald-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] backdrop-blur-xl"
+                : "border border-lime-200/15 bg-lime-300/10 text-lime-300 backdrop-blur-xl"
           }`}
         >
           {weekLeft > 0 ? "待补齐" : "已达标"}
@@ -1234,7 +1271,9 @@ function ParentWeeklySummaryBlock({
       </div>
 
       <div className={`mt-4 rounded-[22px] px-4 py-3 text-[15px] font-bold leading-6 ${
-        isLight ? "bg-blue-50 text-slate-700" : "bg-white/[0.06] text-white/75"
+        isLight
+          ? "border border-white/60 bg-white/40 text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.76)] backdrop-blur-xl"
+          : "border border-white/10 bg-white/[0.06] text-white/75 backdrop-blur-xl"
       }`}>
         {summaryText}
       </div>
@@ -1267,8 +1306,8 @@ function ParentWeeklySummaryBlock({
         onClick={() => setShowDetails((value) => !value)}
         className={`mt-4 flex w-full items-center justify-center gap-1 rounded-full py-2 text-[13px] font-bold ${
           isLight
-            ? "bg-gray-50 text-[#1677ff] active:bg-blue-50"
-            : "bg-white/[0.06] text-lime-300 active:bg-white/[0.1]"
+            ? "border border-white/60 bg-white/40 text-[#1677ff] shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] backdrop-blur-xl active:bg-white/55"
+            : "border border-white/10 bg-white/[0.06] text-cyan-200 backdrop-blur-xl active:bg-white/[0.1]"
         }`}
       >
         {showDetails ? "收起趋势数据" : "查看趋势数据"}
@@ -1332,20 +1371,20 @@ function ParentSummaryTile({
   const isLight = theme === "light";
   const toneClass = isLight
     ? {
-        blue: "bg-blue-50 text-[#1677ff]",
-        green: "bg-emerald-50 text-emerald-600",
-        orange: "bg-orange-50 text-orange-600",
-        pink: "bg-rose-50 text-rose-500",
+        blue: "border-sky-200/55 bg-sky-100/40 text-[#0b73ff]",
+        green: "border-emerald-200/55 bg-emerald-100/40 text-emerald-600",
+        orange: "border-orange-200/55 bg-orange-100/40 text-orange-600",
+        pink: "border-rose-200/55 bg-rose-100/40 text-rose-500",
       }[tone]
     : {
-        blue: "bg-sky-300/10 text-sky-300",
-        green: "bg-lime-300/10 text-lime-300",
-        orange: "bg-orange-300/10 text-orange-300",
-        pink: "bg-rose-300/10 text-rose-300",
+        blue: "border-sky-200/15 bg-sky-300/10 text-sky-300",
+        green: "border-lime-200/15 bg-lime-300/10 text-lime-300",
+        orange: "border-orange-200/15 bg-orange-300/10 text-orange-300",
+        pink: "border-rose-200/15 bg-rose-300/10 text-rose-300",
       }[tone];
 
   return (
-    <div className={`min-w-0 rounded-[18px] px-3 py-3 ${toneClass}`}>
+    <div className={`min-w-0 rounded-[22px] border px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] backdrop-blur-xl ${toneClass}`}>
       <div className="truncate text-[11px] font-bold opacity-75">{label}</div>
       <div className="mt-2 truncate text-[20px] font-black leading-none">{value}</div>
       <div className="mt-2 truncate text-[10px] font-semibold opacity-70">{helper}</div>
@@ -1466,8 +1505,8 @@ function ParentSportDetailsBlock({
       </div>
 
       <div
-        className={`mt-4 grid grid-cols-4 gap-1 rounded-full p-1 ${
-          isLight ? "bg-gray-100" : "bg-white/[0.06]"
+        className={`mt-4 grid grid-cols-4 gap-1 rounded-full border p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur-xl ${
+          isLight ? "border-white/60 bg-white/35" : "border-white/10 bg-white/[0.06]"
         }`}
       >
         {tabs.map((tab) => {
@@ -1479,8 +1518,8 @@ function ParentSportDetailsBlock({
               className={`h-9 rounded-full text-[12px] font-bold transition-colors ${
                 isActive
                   ? isLight
-                    ? "bg-white text-[#1677ff] shadow-sm"
-                    : "bg-lime-300 text-[#071006]"
+                    ? "bg-white/70 text-[#1677ff] shadow-[0_8px_20px_rgba(55,93,142,0.12),inset_0_1px_0_rgba(255,255,255,0.85)]"
+                    : "bg-white/15 text-cyan-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.18)]"
                   : isLight
                     ? "text-slate-500"
                     : "text-white/55"
@@ -1506,8 +1545,8 @@ function ParentSportDetailsBlock({
                 onClick={() => setShowAllPeers((value) => !value)}
                 className={`rounded-full px-3 py-1.5 text-[12px] font-bold ${
                   isLight
-                    ? "bg-blue-50 text-[#1677ff] active:bg-blue-100"
-                    : "bg-white/10 text-lime-300 active:bg-white/15"
+                    ? "border border-white/60 bg-white/40 text-[#1677ff] shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] backdrop-blur-xl active:bg-white/60"
+                    : "border border-white/10 bg-white/10 text-cyan-200 backdrop-blur-xl active:bg-white/15"
                 }`}
               >
                 {showAllPeers ? "看附近" : "看全部"}
@@ -1523,8 +1562,8 @@ function ParentSportDetailsBlock({
                   className={`flex items-center gap-3 py-3 ${
                     isCurrent
                       ? isLight
-                        ? "rounded-2xl bg-blue-50 px-2"
-                        : "rounded-2xl bg-lime-300/10 px-2"
+                        ? "rounded-2xl border border-white/60 bg-white/40 px-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] backdrop-blur-xl"
+                        : "rounded-2xl border border-white/10 bg-white/[0.07] px-2 backdrop-blur-xl"
                       : ""
                   }`}
                 >
@@ -1545,7 +1584,7 @@ function ParentSportDetailsBlock({
                       {isCurrent && (
                         <span
                           className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                            isLight ? "bg-white text-[#1677ff]" : "bg-lime-300 text-[#071006]"
+                            isLight ? "bg-white/70 text-[#1677ff]" : "bg-white/15 text-cyan-100"
                           }`}
                         >
                           我
@@ -1647,14 +1686,16 @@ function AbilityDevelopmentBlock({
         </div>
         <div
           className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-bold ${
-            isLight ? "bg-blue-50 text-[#1677ff]" : "bg-white/10 text-lime-300"
+            isLight
+              ? "border border-white/60 bg-white/40 text-[#1677ff] shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] backdrop-blur-xl"
+              : "border border-white/10 bg-white/10 text-cyan-200 backdrop-blur-xl"
           }`}
         >
           {Number(selectedMonth.slice(5))}月
         </div>
       </div>
 
-      <div className={`mt-5 rounded-[20px] p-4 ${isLight ? "bg-gray-50" : "bg-white/[0.06]"}`}>
+      <div className={`mt-5 rounded-[24px] border p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] backdrop-blur-xl ${isLight ? "border-white/60 bg-white/40" : "border-white/10 bg-white/[0.06]"}`}>
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className={`text-[12px] font-bold ${themeStyles.mutedText}`}>
@@ -1698,8 +1739,8 @@ function AbilityDevelopmentBlock({
         onClick={() => setShowRadar((value) => !value)}
         className={`mt-4 flex w-full items-center justify-center gap-1 rounded-full py-2 text-[13px] font-bold ${
           isLight
-            ? "bg-gray-50 text-[#1677ff] active:bg-blue-50"
-            : "bg-white/[0.06] text-lime-300 active:bg-white/[0.1]"
+            ? "border border-white/60 bg-white/40 text-[#1677ff] shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] backdrop-blur-xl active:bg-white/55"
+            : "border border-white/10 bg-white/[0.06] text-cyan-200 backdrop-blur-xl active:bg-white/[0.1]"
         }`}
       >
         {showRadar ? "收起能力图" : "查看能力图"}
@@ -1707,7 +1748,7 @@ function AbilityDevelopmentBlock({
       </button>
 
       {showRadar && (
-        <div className={`mt-4 rounded-[24px] p-4 ${isLight ? "bg-gray-50" : "bg-white/[0.06]"}`}>
+        <div className={`mt-4 rounded-[26px] border p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] backdrop-blur-xl ${isLight ? "border-white/60 bg-white/35" : "border-white/10 bg-white/[0.06]"}`}>
           <AbilityRadar axes={axes} theme={theme} />
         </div>
       )}
@@ -1731,18 +1772,18 @@ function AbilityResultCard({
   const isLight = theme === "light";
   const toneClass = isLight
     ? {
-        green: "bg-emerald-50 text-emerald-600",
-        orange: "bg-orange-50 text-orange-600",
-        blue: "bg-blue-50 text-[#1677ff]",
+        green: "border-emerald-200/55 bg-emerald-100/40 text-emerald-600",
+        orange: "border-orange-200/55 bg-orange-100/40 text-orange-600",
+        blue: "border-sky-200/55 bg-sky-100/40 text-[#0b73ff]",
       }[tone]
     : {
-        green: "bg-lime-300/10 text-lime-300",
-        orange: "bg-orange-300/10 text-orange-300",
-        blue: "bg-sky-300/10 text-sky-300",
+        green: "border-lime-200/15 bg-lime-300/10 text-lime-300",
+        orange: "border-orange-200/15 bg-orange-300/10 text-orange-300",
+        blue: "border-sky-200/15 bg-sky-300/10 text-sky-300",
       }[tone];
 
   return (
-    <div className={`min-w-0 rounded-[20px] px-3 py-4 ${toneClass}`}>
+    <div className={`min-w-0 rounded-[22px] border px-3 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] backdrop-blur-xl ${toneClass}`}>
       <div className="truncate text-[11px] font-bold opacity-80">{label}</div>
       <div className="mt-2 truncate text-[19px] font-black leading-none">{value}</div>
       <div className="mt-2 truncate text-[11px] font-semibold opacity-75">{helper}</div>
@@ -1784,7 +1825,9 @@ function PersonalGoalBlock({
         <button
           onClick={onOpenSettings}
           className={`shrink-0 rounded-full px-3 py-1.5 text-[12px] font-bold ${
-            isLight ? "bg-blue-50 text-[#1677ff]" : "bg-white/10 text-lime-300"
+            isLight
+              ? "border border-white/60 bg-white/40 text-[#1677ff] shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] backdrop-blur-xl"
+              : "border border-white/10 bg-white/10 text-cyan-200 backdrop-blur-xl"
           }`}
         >
           制定目标
@@ -1805,9 +1848,11 @@ function PersonalGoalBlock({
         </div>
       </div>
 
-      <div className={`mt-4 h-3 overflow-hidden rounded-full ${isLight ? "bg-gray-100" : "bg-white/10"}`}>
+      <div className={`mt-4 h-3 overflow-hidden rounded-full border shadow-[inset_0_1px_0_rgba(255,255,255,0.45)] ${
+        isLight ? "border-white/55 bg-white/35" : "border-white/10 bg-white/10"
+      }`}>
         <div
-          className={`h-full rounded-full ${isLight ? "bg-[#1677ff]" : "bg-lime-300"}`}
+          className={`h-full rounded-full shadow-[inset_0_1px_0_rgba(255,255,255,0.48)] ${isLight ? "bg-[#1677ff]/90" : "bg-cyan-200/85"}`}
           style={{ width: `${percent}%` }}
         />
       </div>
@@ -2278,7 +2323,9 @@ function GrowthCard({
       }[tone];
 
   return (
-    <div className={`rounded-[20px] p-3 ${isLight ? "bg-gray-50" : "bg-white/[0.06]"}`}>
+    <div className={`rounded-[22px] border p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.68)] backdrop-blur-xl ${
+      isLight ? "border-white/60 bg-white/35" : "border-white/10 bg-white/[0.06]"
+    }`}>
       <div className={`text-[11px] font-medium ${isLight ? "text-gray-500" : "text-white/45"}`}>
         {label}
       </div>
@@ -2320,7 +2367,7 @@ function MiniBars({
         pink: "bg-rose-300",
         purple: "bg-violet-300",
       }[tone];
-  const neutralClass = isLight ? "bg-gray-200" : "bg-white/[0.14]";
+  const neutralClass = isLight ? "bg-white/55" : "bg-white/[0.14]";
   const maxValue = Math.max(1, ...values);
 
   return (
@@ -2364,17 +2411,19 @@ function AchievementBadge({
 
   return (
     <div
-      className={`rounded-[20px] border p-3 text-center ${
+      className={`rounded-[22px] border p-3 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.68)] backdrop-blur-xl ${
         isLight
           ? item.active
-            ? "border-amber-100 bg-amber-50 text-amber-700"
-            : "border-gray-100 bg-gray-50 text-gray-400"
+            ? "border-amber-200/55 bg-amber-100/40 text-amber-700"
+            : "border-white/55 bg-white/30 text-gray-400"
           : item.active
             ? "border-lime-300/20 bg-lime-300/10 text-lime-200"
             : "border-white/10 bg-white/[0.04] text-white/35"
       }`}
     >
-      <div className={`mx-auto flex h-9 w-9 items-center justify-center rounded-2xl ${isLight ? "bg-white" : "bg-white/10"}`}>
+      <div className={`mx-auto flex h-9 w-9 items-center justify-center rounded-2xl border shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] ${
+        isLight ? "border-white/60 bg-white/50" : "border-white/10 bg-white/10"
+      }`}>
         {item.active ? item.icon : <Star className="h-4 w-4" />}
       </div>
       <div className="mt-2 text-[12px] font-bold">{item.title}</div>
@@ -2412,8 +2461,8 @@ function StudentSettingsSheet({
         className="absolute inset-0 bg-black/45"
       />
       <div
-        className={`absolute bottom-0 left-1/2 max-h-[82vh] w-full max-w-[480px] -translate-x-1/2 overflow-y-auto rounded-t-[28px] p-4 pb-6 shadow-2xl ${
-          isLight ? "bg-white text-gray-950" : "bg-[#1c1d21] text-white"
+        className={`absolute bottom-0 left-1/2 max-h-[82vh] w-full max-w-[480px] -translate-x-1/2 overflow-y-auto rounded-t-[32px] border p-4 pb-6 shadow-[0_-24px_80px_rgba(30,55,91,0.25),inset_0_1px_0_rgba(255,255,255,0.8)] backdrop-blur-2xl ${
+          isLight ? "border-white/60 bg-white/55 text-gray-950" : "border-white/10 bg-[#101827]/75 text-white"
         }`}
       >
         <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-gray-300/70" />
@@ -2423,7 +2472,7 @@ function StudentSettingsSheet({
             aria-label="关闭设置"
             onClick={onClose}
             className={`flex h-9 w-9 items-center justify-center rounded-full ${
-              isLight ? "bg-gray-100 text-gray-700" : "bg-white/10 text-white/80"
+              isLight ? "border border-white/60 bg-white/45 text-gray-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]" : "border border-white/10 bg-white/10 text-white/80"
             }`}
           >
             <X className="h-5 w-5" />
@@ -2431,8 +2480,8 @@ function StudentSettingsSheet({
         </div>
 
         <div
-          className={`mt-4 rounded-[22px] p-3 ${
-            isLight ? "bg-gray-50" : "bg-white/[0.06]"
+          className={`mt-4 rounded-[24px] border p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.66)] backdrop-blur-xl ${
+            isLight ? "border-white/60 bg-white/35" : "border-white/10 bg-white/[0.06]"
           }`}
         >
           <div
@@ -2461,8 +2510,8 @@ function StudentSettingsSheet({
         </div>
 
         <div
-          className={`mt-3 rounded-[22px] p-3 ${
-            isLight ? "bg-gray-50" : "bg-white/[0.06]"
+          className={`mt-3 rounded-[24px] border p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.66)] backdrop-blur-xl ${
+            isLight ? "border-white/60 bg-white/35" : "border-white/10 bg-white/[0.06]"
           }`}
         >
           <div
@@ -2486,8 +2535,8 @@ function StudentSettingsSheet({
                 onGoalChange({ ...goal, title: event.target.value })
               }
               className={`mt-1 h-11 w-full rounded-2xl px-3 text-[14px] font-semibold outline-none ${
-                isLight
-                  ? "border border-gray-200 bg-white text-gray-950"
+                  isLight
+                  ? "border border-white/60 bg-white/50 text-gray-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] backdrop-blur-xl"
                   : "border border-white/10 bg-black/20 text-white"
               }`}
             />
@@ -2509,7 +2558,7 @@ function StudentSettingsSheet({
                 }
                 className={`mt-1 h-11 w-full rounded-2xl px-3 text-[14px] font-semibold outline-none ${
                   isLight
-                    ? "border border-gray-200 bg-white text-gray-950"
+                    ? "border border-white/60 bg-white/50 text-gray-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] backdrop-blur-xl"
                     : "border border-white/10 bg-black/20 text-white"
                 }`}
               >
@@ -2542,7 +2591,7 @@ function StudentSettingsSheet({
                 }
                 className={`mt-1 h-11 w-full rounded-2xl px-3 text-center text-[16px] font-bold outline-none ${
                   isLight
-                    ? "border border-gray-200 bg-white text-gray-950"
+                    ? "border border-white/60 bg-white/50 text-gray-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] backdrop-blur-xl"
                     : "border border-white/10 bg-black/20 text-white"
                 }`}
               />
@@ -2552,15 +2601,15 @@ function StudentSettingsSheet({
 
         <div
           className={`sticky bottom-0 -mx-4 mt-3 px-4 pt-3 pb-1 ${
-            isLight ? "bg-white" : "bg-[#1c1d21]"
+            isLight ? "bg-white/0" : "bg-transparent"
           }`}
         >
           <button
             onClick={onClose}
             className={`h-12 w-full rounded-2xl text-[16px] font-bold shadow-sm ${
               isLight
-                ? "bg-[#1677ff] text-white active:bg-[#0958d9]"
-                : "bg-lime-300 text-[#071006] active:bg-lime-400"
+                ? "border border-white/50 bg-[#1677ff]/90 text-white shadow-[0_18px_38px_rgba(22,119,255,0.28),inset_0_1px_0_rgba(255,255,255,0.55)] backdrop-blur-xl active:bg-[#1677ff]"
+                : "border border-lime-200/55 bg-lime-300/85 text-[#071006] shadow-[0_18px_36px_rgba(190,242,100,0.22),inset_0_1px_0_rgba(255,255,255,0.65)] backdrop-blur-xl active:bg-lime-300"
             }`}
           >
             确定
@@ -2592,11 +2641,11 @@ function ThemeOptionButton({
       className={`flex h-12 items-center justify-center gap-2 rounded-2xl text-[14px] font-bold ${
         active
           ? isLight
-            ? "bg-[#1677ff] text-white"
-            : "bg-lime-300 text-[#071006]"
+            ? "border border-white/50 bg-[#1677ff]/90 text-white shadow-[0_12px_26px_rgba(22,119,255,0.22),inset_0_1px_0_rgba(255,255,255,0.5)]"
+            : "border border-lime-200/55 bg-lime-300/85 text-[#071006]"
           : isLight
-            ? "bg-white text-gray-600"
-            : "bg-white/10 text-white/65"
+            ? "border border-white/60 bg-white/40 text-gray-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] backdrop-blur-xl"
+            : "border border-white/10 bg-white/10 text-white/65"
       }`}
     >
       {icon}
@@ -2619,8 +2668,8 @@ function SectionTitle({
   return (
     <div className="flex items-center gap-2">
       <div
-        className={`flex h-7 w-7 items-center justify-center rounded-2xl ${
-          isLight ? "bg-blue-50 text-[#1677ff]" : "bg-white/10 text-lime-300"
+        className={`flex h-7 w-7 items-center justify-center rounded-2xl border shadow-[inset_0_1px_0_rgba(255,255,255,0.78)] backdrop-blur-xl ${
+          isLight ? "border-white/60 bg-white/45 text-[#1677ff]" : "border-white/10 bg-white/10 text-cyan-200"
         }`}
       >
         {icon}

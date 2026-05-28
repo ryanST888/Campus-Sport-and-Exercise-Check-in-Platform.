@@ -32,7 +32,7 @@ export function Header({
   };
 
   return (
-    <div className={`sticky top-0 z-40 w-full h-12 ${bg} flex items-center justify-between px-4 shadow-[0_1px_2px_rgba(0,0,0,0.05)]`}>
+    <div className={`sticky top-0 z-40 flex h-12 w-full items-center justify-between px-4 shadow-[0_1px_2px_rgba(0,0,0,0.05)] ${bg}`}>
       <div className="min-w-[32px] flex items-center justify-start shrink-0">
         {showBack && (
           <button onClick={handleBack} className={`p-1 -ml-1 rounded-full transition-colors ${iconClassName}`}>
