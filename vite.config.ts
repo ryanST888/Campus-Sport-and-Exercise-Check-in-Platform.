@@ -8,7 +8,14 @@ export default defineConfig(({mode}) => {
   return {
     plugins: [react(), tailwindcss()],
     define: {
-      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
+      'process.env.COZE_API_BASE': JSON.stringify(env.COZE_API_BASE),
+      'process.env.COZE_API_TOKEN': JSON.stringify(env.COZE_API_TOKEN),
+      'process.env.COZE_WORKFLOW_ID': JSON.stringify(env.COZE_WORKFLOW_ID),
+      'process.env.COZE_POLICY_WORKFLOW_ID': JSON.stringify(env.COZE_POLICY_WORKFLOW_ID),
+      'process.env.COZE_CHAT_WORKFLOW_ID': JSON.stringify(env.COZE_CHAT_WORKFLOW_ID),
+      'process.env.COZE_BOT_ID': JSON.stringify(env.COZE_BOT_ID),
+      'process.env.COZE_APP_ID': JSON.stringify(env.COZE_APP_ID),
+      'process.env.COZE_PARAMETERS_FORMAT': JSON.stringify(env.COZE_PARAMETERS_FORMAT),
     },
     resolve: {
       alias: {

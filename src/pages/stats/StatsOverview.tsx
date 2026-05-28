@@ -1,4 +1,12 @@
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import {
+  type ChangeEvent,
+  type PointerEvent,
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useNavigate } from "react-router-dom";
 import {
   CartesianGrid,
@@ -14,6 +22,7 @@ import {
   BarChart3,
   Bed,
   BookOpen,
+  Camera,
   ChevronDown,
   ChevronRight,
   ClipboardCheck,
@@ -23,21 +32,32 @@ import {
   HeartPulse,
   HelpCircle,
   Home,
+  Image as ImageIcon,
   Layers3,
   Link2,
+  Loader2,
   Lock,
   Medal,
+  Mic,
+  Paperclip,
+  Plus,
+  Printer,
+  RefreshCw,
   School,
+  Send,
   ShieldCheck,
   Smile,
   Sparkles,
   Target,
   Timer,
+  Trash2,
   TrendingUp,
   UserRound,
   Users,
+  Video,
   X,
 } from "lucide-react";
+import toast from "react-hot-toast";
 import { Header } from "../../components/ui/Header";
 import {
   type Category,
@@ -66,6 +86,18 @@ import {
   calculateStudentGrowthIndex,
   toPercent,
 } from "../../lib/studentIndexMetrics";
+import {
+  askStatsAi,
+  buildPolicyAiReport,
+  type AnalyticsReportCategory,
+  type DrillReportRow,
+  type ReportSection,
+  type ReportVisual,
+  type StatsAiAttachmentInput,
+  type StatsReport,
+  type StatsReportInput,
+  type StatsReportKind,
+} from "../../lib/statsReports";
 
 type ViewerLevel = "top" | "medium" | "basic" | "student";
 type DataScope = "school" | "grade" | "class" | "student";
@@ -89,6 +121,23 @@ type TopMetric = {
   unit?: string;
   trend?: string;
   source: MetricSource;
+};
+
+type SnapshotMetricTone = "blue" | "green" | "orange" | "rose";
+
+type SnapshotMetric = {
+  label: string;
+  value: string;
+  helper: string;
+  tone: SnapshotMetricTone;
+};
+
+type RoleSnapshotConfig = {
+  eyebrow: string;
+  title: string;
+  metrics: SnapshotMetric[];
+  aiHint: string;
+  aiPlaceholder: string;
 };
 
 type TopAnalyticsCategory = {
@@ -118,6 +167,63 @@ type IndexFunctionGuide = {
   inputs: string;
   formula: string;
 };
+
+type AiConversationMessage = {
+  id: string;
+  role: "assistant" | "user";
+  text: string;
+  source?: "AI生成" | "本地分析";
+  attachments?: AiAttachmentDraft[];
+};
+
+type AiAttachmentDraft = StatsAiAttachmentInput & {
+  previewUrl?: string;
+};
+
+type SpeechRecognitionConstructor = new () => SpeechRecognitionInstance;
+
+type SpeechRecognitionAlternativeLike = {
+  transcript: string;
+};
+
+type SpeechRecognitionResultLike = {
+  isFinal: boolean;
+  length: number;
+  [index: number]: SpeechRecognitionAlternativeLike;
+};
+
+type SpeechRecognitionResultListLike = {
+  length: number;
+  [index: number]: SpeechRecognitionResultLike;
+};
+
+type SpeechRecognitionEventLike = Event & {
+  results: SpeechRecognitionResultListLike;
+};
+
+type SpeechRecognitionErrorEventLike = Event & {
+  error?: string;
+};
+
+type SpeechRecognitionInstance = {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  maxAlternatives: number;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+  onend: (() => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEventLike) => void) | null;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+};
+
+declare global {
+  interface Window {
+    SpeechRecognition?: SpeechRecognitionConstructor;
+    webkitSpeechRecognition?: SpeechRecognitionConstructor;
+  }
+}
 
 const viewerProfiles: ViewerProfile[] = [
   {
@@ -374,6 +480,9 @@ export function StatsOverview() {
   const [selectedClassKey, setSelectedClassKey] = useState("");
   const [selectedStudentId, setSelectedStudentId] = useState("");
   const [trendPeriod, setTrendPeriod] = useState<TrendPeriod>("month");
+  const [activeReport, setActiveReport] = useState<StatsReport | null>(null);
+  const [reportBusy, setReportBusy] = useState<StatsReportKind | null>(null);
+  const [coreOverviewOpenSignal, setCoreOverviewOpenSignal] = useState(0);
 
   const grades = useMemo(
     () => Array.from(new Set<string>(allowedStudents.map((student) => student.grade))),
@@ -458,8 +567,28 @@ export function StatsOverview() {
     [records, statsMonth],
   );
 
+  const allowedStudentIds = useMemo(
+    () => new Set(allowedStudents.map((student) => student.id)),
+    [allowedStudents],
+  );
+
+  const allowedMonthRecords = useMemo(
+    () =>
+      records.filter(
+        (record) =>
+          !record.isInvalid &&
+          record.datetime.startsWith(statsMonth) &&
+          allowedStudentIds.has(record.studentId),
+      ),
+    [allowedStudentIds, records, statsMonth],
+  );
+
+  const allowedPassedRecords = allowedMonthRecords.filter((record) => record.isPassed);
   const passedRecords = monthRecords.filter((record) => record.isPassed);
-  const activeProjects = projects.filter((project) => project.status === "open");
+  const activeProjects = useMemo(
+    () => projects.filter((project) => project.status === "open"),
+    [projects],
+  );
   const participantCount = new Set(monthRecords.map((record) => record.studentId)).size;
   const completionRate =
     scopedStudents.length > 0
@@ -533,6 +662,29 @@ export function StatsOverview() {
     })
     .sort((a, b) => b.totalTimes - a.totalTimes || b.records - a.records);
 
+  const allowedClassRows = Object.entries(groupBy(allowedStudents, getStudentLabel))
+    .map(([className, students]) =>
+      buildGroupRow(className, students, allowedMonthRecords, allowedPassedRecords),
+    )
+    .sort((a, b) => b.rate - a.rate || b.totalTimes - a.totalTimes);
+
+  const allowedStudentRows = allowedStudents
+    .map((student) => {
+      const studentRecords = allowedMonthRecords.filter(
+        (record) => record.studentId === student.id,
+      );
+      const studentPassed = studentRecords.filter((record) => record.isPassed);
+      return {
+        id: student.id,
+        name: student.name,
+        className: getStudentLabel(student),
+        records: studentRecords.length,
+        totalTimes: getTotalTimes(studentPassed),
+        rate: studentRecords.length > 0 ? 100 : 0,
+      };
+    })
+    .sort((a, b) => b.totalTimes - a.totalTimes || b.records - a.records);
+
   const projectRows = activeProjects
     .map((project) => {
       const projectRecords = monthRecords.filter(
@@ -575,372 +727,2180 @@ export function StatsOverview() {
     (sum, category) => sum + category.metrics.length,
     0,
   );
+  const currentScopeAnalytics = useMemo(
+    () =>
+      buildTopLevelAnalytics({
+        students: scopedStudents,
+        projects: activeProjects,
+        records: monthRecords,
+        categories,
+        statsMonth,
+      }),
+    [activeProjects, categories, monthRecords, scopedStudents, statsMonth],
+  );
+  const healthGovernanceIndex = Math.round(
+    currentScopeAnalytics.reduce((sum, category) => sum + category.score, 0) /
+      Math.max(1, currentScopeAnalytics.length),
+  );
+  const sportsPassRate = toPercent(passedRecords.length, monthRecords.length);
+  const schoolProgressRate = Number(
+    currentScopeAnalytics
+      .find((category) => category.id === "advanced-index")
+      ?.metrics.find((item) => item.name === "年级体育发展指数")?.value ??
+      healthGovernanceIndex,
+  );
+  const riskStudentCount = useMemo(
+    () =>
+      scopedStudents.filter((student) => {
+        const studentRecords = monthRecords.filter(
+          (record) => record.studentId === student.id,
+        );
+        const studentPassedRecords = studentRecords.filter((record) => record.isPassed);
+        return studentRecords.length === 0 || getTotalTimes(studentPassedRecords) === 0;
+      }).length,
+    [monthRecords, scopedStudents],
+  );
+
+  const snapshotConfig = buildRoleSnapshotConfig({
+    viewer,
+    targetLabel,
+    passRate: sportsPassRate,
+    governanceIndex: healthGovernanceIndex,
+    progressRate: schoolProgressRate,
+    riskStudentCount,
+    completionRate,
+    totalTimes,
+    scopedStudents,
+    allowedClassRows,
+    allowedStudentRows,
+    selectedClassKey,
+    selectedStudentId,
+  });
+
+  const currentReportInput: StatsReportInput = {
+    scope: dataScope,
+    targetLabel,
+    statsMonth,
+    students: scopedStudents,
+    records: monthRecords,
+    projects: activeProjects,
+    categories,
+    categoryRows,
+    projectRows,
+    drillRows: drillRows as DrillReportRow[],
+    analyticsCategories: currentScopeAnalytics.map(
+      ({ icon: _icon, ...category }) => category,
+    ) as AnalyticsReportCategory[],
+  };
+
+  const handlePolicyReport = async () => {
+    setReportBusy("policy-ai");
+    toast("正在生成政策AI报告...", { icon: "AI", duration: 1200 });
+
+    try {
+      const report = await buildPolicyAiReport(currentReportInput);
+      setActiveReport(report);
+      toast.success(
+        report.source === "AI生成"
+          ? "AI报告已生成"
+          : "AI不可用，已生成本地分析报告",
+      );
+    } catch {
+      toast.error("报告生成失败，请稍后再试");
+    } finally {
+      setReportBusy(null);
+    }
+  };
+
+  const handleViewAllData = () => {
+    setCoreOverviewOpenSignal((signal) => signal + 1);
+    window.requestAnimationFrame(() => {
+      document
+        .getElementById("core-overview")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
 
   return (
     <div className="flex min-h-screen flex-col bg-[#f3f5f8] pb-24">
       <Header title="统计" showBack={false} />
 
       <div className="space-y-4 p-4">
-        <section className="rounded-lg border border-gray-100 bg-white p-4 shadow-sm">
-          <div className="flex items-start justify-between gap-3">
+        <LeadershipSnapshotPanel
+          viewerProfiles={viewerProfiles}
+          activeViewerId={viewerId}
+          onViewerChange={setViewerId}
+          targetLabel={targetLabel}
+          monthLabel={getMonthLabel(statsMonth)}
+          riskStudentCount={riskStudentCount}
+          snapshotConfig={snapshotConfig}
+          onViewData={handleViewAllData}
+          onGenerateReport={handlePolicyReport}
+          isGenerating={reportBusy === "policy-ai"}
+          reportInput={currentReportInput}
+        />
+
+        <div id="all-stats-data" className="space-y-4 scroll-mt-4">
+          <CollapsibleStatsSection
+            icon={<ShieldCheck className="h-4 w-4" />}
+            title="统计设置"
+            aside={`${viewer.name} · ${scopeOptions.find((option) => option.key === dataScope)?.label || "当前范围"}`}
+            defaultOpen={false}
+            headerAction={
+              <input
+                type="month"
+                value={statsMonth}
+                onChange={(event) => setStatsMonth(event.target.value)}
+                className="h-9 shrink-0 rounded-lg border border-gray-200 bg-gray-50 px-2 text-[12px] font-medium text-gray-700 outline-none focus:border-[#1677ff]"
+              />
+            }
+          >
             <div>
-              <div className="text-[13px] font-medium text-gray-500">
-                当前登录视角
-              </div>
-              <h1 className="mt-1 text-[23px] font-bold leading-tight text-gray-950">
+              <h1 className="text-[23px] font-bold leading-tight text-gray-950">
                 {viewer.name}
               </h1>
               <p className="mt-1 text-[12px] leading-5 text-gray-500">
                 {viewer.title} · 可见 {allowedStudents.length} 名学生的统计数据
               </p>
             </div>
-            <input
-              type="month"
-              value={statsMonth}
-              onChange={(event) => setStatsMonth(event.target.value)}
-              className="h-9 shrink-0 rounded-lg border border-gray-200 bg-gray-50 px-2 text-[12px] font-medium text-gray-700 outline-none focus:border-[#1677ff]"
-            />
-          </div>
 
-          <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
-            {viewerProfiles.map((profile) => (
-              <button
-                key={profile.id}
-                onClick={() => setViewerId(profile.id)}
-                className={`shrink-0 rounded-lg px-3 py-2 text-left text-[12px] font-semibold ${
-                  viewer.id === profile.id
-                    ? "bg-gray-950 text-white"
-                    : "bg-gray-100 text-gray-600"
-                }`}
-              >
-                <span className="block">{profile.name}</span>
-                <span className="mt-0.5 block text-[10px] opacity-70">
-                  {profile.title}
-                </span>
-              </button>
-            ))}
-          </div>
-        </section>
-
-        {viewer.level === "top" && (
-          <TopLevelAnalyticsPanel
-            categories={topLevelAnalytics}
-            metricCount={topLevelMetricCount}
-            statsMonth={statsMonth}
-          />
-        )}
-
-        <section className="rounded-lg border border-gray-100 bg-white p-4 shadow-sm">
-          <SectionTitle
-            icon={<ShieldCheck className="h-4 w-4" />}
-            title="数据层级"
-            aside="按权限启用"
-          />
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            {scopeOptions.map((option) => {
-              const allowed = allowedScopes.includes(option.key);
-              return (
+            <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
+              {viewerProfiles.map((profile) => (
                 <button
-                  key={option.key}
-                  disabled={!allowed}
-                  onClick={() => allowed && setDataScope(option.key)}
-                  className={`flex min-h-[50px] items-center justify-between rounded-lg border px-3 py-2 text-left ${
-                    dataScope === option.key
-                      ? "border-[#1677ff] bg-blue-50 text-[#1677ff]"
-                      : allowed
-                        ? "border-gray-100 bg-gray-50 text-gray-700"
-                        : "border-gray-100 bg-gray-50 text-gray-300"
+                  key={profile.id}
+                  onClick={() => setViewerId(profile.id)}
+                  className={`shrink-0 rounded-lg px-3 py-2 text-left text-[12px] font-semibold ${
+                    viewer.id === profile.id
+                      ? "bg-gray-950 text-white"
+                      : "bg-gray-100 text-gray-600"
                   }`}
                 >
-                  <span className="text-[13px] font-bold">{option.label}</span>
-                  {!allowed && <Lock className="h-3.5 w-3.5" />}
+                  <span className="block">{profile.name}</span>
+                  <span className="mt-0.5 block text-[10px] opacity-70">
+                    {profile.title}
+                  </span>
                 </button>
-              );
-            })}
-          </div>
-
-          {dataScope === "grade" && viewer.level === "top" && (
-            <SelectorRow
-              label="选择年级"
-              items={grades}
-              value={selectedGrade}
-              onChange={setSelectedGrade}
-            />
-          )}
-
-          {dataScope === "class" && (
-            <SelectorRow
-              label="选择班级"
-              items={classKeys}
-              value={selectedClassKey}
-              onChange={setSelectedClassKey}
-            />
-          )}
-
-          {dataScope === "student" && viewer.level !== "student" && (
-            <SelectorRow
-              label="选择学生"
-              items={allowedStudents.map((student) => student.id)}
-              value={selectedStudentId}
-              onChange={setSelectedStudentId}
-              getLabel={(studentId) =>
-                allowedStudents.find((student) => student.id === studentId)?.name || studentId
-              }
-            />
-          )}
-        </section>
-
-        <section className="rounded-lg border border-gray-100 bg-white p-4 shadow-sm">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <div className="text-[13px] font-medium text-gray-500">
-                {scopeOptions.find((option) => option.key === dataScope)?.title}
-              </div>
-              <h2 className="mt-1 text-[22px] font-bold leading-tight text-gray-950">
-                {getScopeTitle(dataScope, targetLabel || "当前范围")}
-              </h2>
+              ))}
             </div>
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-[#1677ff]">
-              {dataScope === "student" ? (
-                <UserRound className="h-5 w-5" />
-              ) : dataScope === "class" ? (
-                <Users className="h-5 w-5" />
-              ) : dataScope === "grade" ? (
-                <GraduationCap className="h-5 w-5" />
-              ) : (
-                <BarChart3 className="h-5 w-5" />
+
+            <div className="mt-5 border-t border-gray-100 pt-4">
+              <div className="mb-2 text-[12px] font-bold text-gray-500">
+                数据范围
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {scopeOptions.map((option) => {
+                  const allowed = allowedScopes.includes(option.key);
+                  return (
+                    <button
+                      key={option.key}
+                      disabled={!allowed}
+                      onClick={() => allowed && setDataScope(option.key)}
+                      className={`flex min-h-[50px] items-center justify-between rounded-lg border px-3 py-2 text-left ${
+                        dataScope === option.key
+                          ? "border-[#1677ff] bg-blue-50 text-[#1677ff]"
+                          : allowed
+                            ? "border-gray-100 bg-gray-50 text-gray-700"
+                            : "border-gray-100 bg-gray-50 text-gray-300"
+                      }`}
+                    >
+                      <span className="text-[13px] font-bold">{option.label}</span>
+                      {!allowed && <Lock className="h-3.5 w-3.5" />}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {dataScope === "grade" && viewer.level === "top" && (
+                <SelectorRow
+                  label="选择年级"
+                  items={grades}
+                  value={selectedGrade}
+                  onChange={setSelectedGrade}
+                />
+              )}
+
+              {dataScope === "class" && (
+                <SelectorRow
+                  label="选择班级"
+                  items={classKeys}
+                  value={selectedClassKey}
+                  onChange={setSelectedClassKey}
+                />
+              )}
+
+              {dataScope === "student" && viewer.level !== "student" && (
+                <SelectorRow
+                  label="选择学生"
+                  items={allowedStudents.map((student) => student.id)}
+                  value={selectedStudentId}
+                  onChange={setSelectedStudentId}
+                  getLabel={(studentId) =>
+                    allowedStudents.find((student) => student.id === studentId)?.name || studentId
+                  }
+                />
               )}
             </div>
-          </div>
+          </CollapsibleStatsSection>
 
-          <div className="mt-4 grid grid-cols-2 gap-2">
-            <KpiCard
-              icon={<ClipboardCheck className="h-4 w-4" />}
-              label="有效记录"
-              value={monthRecords.length}
-              unit="条"
-              tone="blue"
-            />
-            <KpiCard
-              icon={<Users className="h-4 w-4" />}
-              label="参与学生"
-              value={participantCount}
-              unit="人"
-              tone="green"
-            />
-            <KpiCard
-              icon={<Target className="h-4 w-4" />}
-              label="完成次数"
-              value={totalTimes}
-              unit="次"
-              tone="amber"
-            />
-            <KpiCard
-              icon={<TrendingUp className="h-4 w-4" />}
-              label="参与率"
-              value={completionRate}
-              unit="%"
-              tone="rose"
-            />
-          </div>
-        </section>
+          <CollapsibleStatsSection
+            id="core-overview"
+            icon={<HeartPulse className="h-4 w-4" />}
+            title="核心概览"
+            aside={`${targetLabel} · 参与率 ${completionRate}%`}
+            defaultOpen={false}
+            forceOpenSignal={coreOverviewOpenSignal}
+          >
+            <div className="grid grid-cols-2 gap-2">
+              <KpiCard
+                icon={<ClipboardCheck className="h-4 w-4" />}
+                label="有效记录"
+                value={monthRecords.length}
+                unit="条"
+                tone="blue"
+              />
+              <KpiCard
+                icon={<Users className="h-4 w-4" />}
+                label="参与学生"
+                value={participantCount}
+                unit="人"
+                tone="green"
+              />
+              <KpiCard
+                icon={<Target className="h-4 w-4" />}
+                label="完成次数"
+                value={totalTimes}
+                unit="次"
+                tone="amber"
+              />
+              <KpiCard
+                icon={<TrendingUp className="h-4 w-4" />}
+                label="参与率"
+                value={completionRate}
+                unit="%"
+                tone="rose"
+              />
+            </div>
 
-        <section className="rounded-lg border border-gray-100 bg-white p-4 shadow-sm">
-          <SectionTitle
+            {viewer.level === "top" && (
+              <TopLevelAnalyticsPanel
+                categories={topLevelAnalytics}
+                metricCount={topLevelMetricCount}
+                statsMonth={statsMonth}
+              />
+            )}
+          </CollapsibleStatsSection>
+
+          <CollapsibleStatsSection
             icon={<TrendingUp className="h-4 w-4" />}
-            title="趋势对比"
-            aside={targetLabel || "当前范围"}
-          />
+            title="趋势与结构"
+            aside={`${targetLabel} · 分类和趋势`}
+            defaultOpen={false}
+          >
+            <div className="flex rounded-lg bg-gray-100 p-1">
+              {trendOptions.map((option) => (
+                <button
+                  key={option.key}
+                  onClick={() => setTrendPeriod(option.key)}
+                  className={`h-8 flex-1 rounded-md text-[13px] font-semibold ${
+                    trendPeriod === option.key
+                      ? "bg-white text-[#1677ff] shadow-sm"
+                      : "text-gray-500"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
 
-          <div className="mt-3 flex rounded-lg bg-gray-100 p-1">
-            {trendOptions.map((option) => (
+            <div className="mt-4 h-[232px] min-w-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart
+                  data={trendData}
+                  margin={{ top: 12, right: 8, left: -24, bottom: 0 }}
+                >
+                  <CartesianGrid
+                    stroke="#eef2f7"
+                    strokeDasharray="3 7"
+                    vertical={false}
+                  />
+                  <XAxis
+                    dataKey="label"
+                    axisLine={false}
+                    tickLine={false}
+                    interval="preserveStartEnd"
+                    tick={{ fill: "#8a93a3", fontSize: 11 }}
+                  />
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    allowDecimals={false}
+                    tick={{ fill: "#c2c8d0", fontSize: 11 }}
+                    width={34}
+                  />
+                  <Tooltip
+                    formatter={(value, name) => [
+                      `${value}${name === "participants" ? "人" : name === "totalTimes" ? "次" : "条"}`,
+                      name === "participants"
+                        ? "参与学生"
+                        : name === "totalTimes"
+                          ? "完成次数"
+                          : "有效记录",
+                    ]}
+                    labelFormatter={(label) => `时间：${label}`}
+                    contentStyle={{
+                      border: "1px solid #e5e7eb",
+                      borderRadius: 8,
+                      boxShadow: "0 10px 24px rgba(30,41,59,0.12)",
+                    }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="totalTimes"
+                    name="完成次数"
+                    stroke="#1677ff"
+                    strokeWidth={3}
+                    dot={{ r: 3, fill: "#ffffff", stroke: "#1677ff", strokeWidth: 2 }}
+                    activeDot={{ r: 5 }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="participants"
+                    name="参与学生"
+                    stroke="#10b981"
+                    strokeWidth={3}
+                    dot={{ r: 3, fill: "#ffffff", stroke: "#10b981", strokeWidth: 2 }}
+                    activeDot={{ r: 5 }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="records"
+                    name="有效记录"
+                    stroke="#f59e0b"
+                    strokeWidth={2}
+                    dot={false}
+                    activeDot={{ r: 4 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="mt-2 flex flex-wrap items-center justify-center gap-4 text-[12px] text-gray-500">
+              <LegendDot color="#1677ff" label="完成次数" />
+              <LegendDot color="#10b981" label="参与学生" />
+              <LegendDot color="#f59e0b" label="有效记录" />
+            </div>
+
+            <div className="mt-5 border-t border-gray-100 pt-4">
+              <SectionTitle
+                icon={<Layers3 className="h-4 w-4" />}
+                title="分类结构"
+                aside="完成次数"
+              />
+              <div className="mt-4 space-y-3">
+                {categoryRows.map((item) => (
+                  <ProgressRow
+                    key={item.name}
+                    label={item.name}
+                    value={item.totalTimes}
+                    helper={`${item.participants}人参与 / 目标 ${item.target}次`}
+                    max={maxCategoryTimes}
+                  />
+                ))}
+              </div>
+            </div>
+          </CollapsibleStatsSection>
+
+          <CollapsibleStatsSection
+            icon={<BarChart3 className="h-4 w-4" />}
+            title="下钻明细"
+            aside="层级 / 项目"
+            defaultOpen={false}
+            headerAction={
               <button
-                key={option.key}
-                onClick={() => setTrendPeriod(option.key)}
-                className={`h-8 flex-1 rounded-md text-[13px] font-semibold ${
-                  trendPeriod === option.key
-                    ? "bg-white text-[#1677ff] shadow-sm"
-                    : "text-gray-500"
+                onClick={() => navigate("/stats/projects")}
+                className="flex items-center gap-1 text-[13px] font-medium text-[#1677ff]"
+              >
+                更多
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            }
+          >
+            <SectionTitle
+              icon={<BarChart3 className="h-4 w-4" />}
+              title={
+                dataScope === "school"
+                  ? "年级数据"
+                  : dataScope === "grade"
+                    ? "班级数据"
+                    : dataScope === "class"
+                      ? "学生数据"
+                      : "个人项目"
+              }
+              aside="当前层级"
+            />
+            <div className="mt-4 space-y-3">
+              {drillRows.length === 0 ? (
+                <div className="rounded-lg bg-gray-50 py-10 text-center text-[13px] text-gray-400">
+                  当前范围暂无统计数据
+                </div>
+              ) : (
+                drillRows.map((row, index) => (
+                  <DrillRow
+                    key={row.id || row.name}
+                    row={row}
+                    rank={index + 1}
+                    scope={dataScope}
+                  />
+                ))
+              )}
+            </div>
+
+            <div className="mt-5 border-t border-gray-100 pt-4">
+              <SectionTitle
+                icon={<Activity className="h-4 w-4" />}
+                title="项目数据"
+                aside="项目维度"
+              />
+              <div className="mt-4 space-y-2">
+                {projectRows.length === 0 ? (
+                  <div className="rounded-lg bg-gray-50 py-8 text-center text-[13px] text-gray-400">
+                    当前范围暂无项目数据
+                  </div>
+                ) : (
+                  projectRows.slice(0, 8).map((project) => (
+                    <button
+                      key={project.id}
+                      onClick={() => navigate(`/stats/projects/${project.id}`)}
+                      className="flex w-full items-center justify-between rounded-lg bg-gray-50 px-3 py-3 text-left active:bg-gray-100"
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate text-[14px] font-bold text-gray-900">
+                          {project.name}
+                        </div>
+                        <div className="mt-0.5 text-[11px] text-gray-500">
+                          {project.category} · {project.participants}人参与
+                        </div>
+                      </div>
+                      <div className="shrink-0 text-[15px] font-bold text-[#1677ff]">
+                        {project.totalTimes}次
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          </CollapsibleStatsSection>
+        </div>
+      </div>
+
+      {activeReport && (
+        <ReportPreviewModal
+          report={activeReport}
+          onClose={() => setActiveReport(null)}
+          onRegenerate={handlePolicyReport}
+          isRegenerating={reportBusy === activeReport.kind}
+        />
+      )}
+    </div>
+  );
+}
+
+function createStatsAiWelcomeMessage(
+  targetLabel: string,
+  monthLabel: string,
+  riskStudentCount: number,
+): AiConversationMessage {
+  return {
+    id: `welcome-${targetLabel}-${monthLabel}`,
+    role: "assistant",
+    text: `我已接入${targetLabel}${monthLabel}的统计数据。你可以直接问我哪些班级或项目需要优先整改、达标率为什么波动，或者下月先盯哪些指标。当前识别到重点风险学生 ${riskStudentCount} 人。`,
+  };
+}
+
+function buildRoleSnapshotConfig({
+  viewer,
+  targetLabel,
+  passRate,
+  governanceIndex,
+  progressRate,
+  riskStudentCount,
+  completionRate,
+  totalTimes,
+  scopedStudents,
+  allowedClassRows,
+  allowedStudentRows,
+  selectedClassKey,
+  selectedStudentId,
+}: {
+  viewer: ViewerProfile;
+  targetLabel: string;
+  passRate: number;
+  governanceIndex: number;
+  progressRate: number;
+  riskStudentCount: number;
+  completionRate: number;
+  totalTimes: number;
+  scopedStudents: Student[];
+  allowedClassRows: ReturnType<typeof buildGroupRow>[];
+  allowedStudentRows: Array<{
+    id: string;
+    name: string;
+    className: string;
+    records: number;
+    totalTimes: number;
+    rate: number;
+  }>;
+  selectedClassKey: string;
+  selectedStudentId: string;
+}): RoleSnapshotConfig {
+  const classRates = allowedClassRows.map((row) => row.rate);
+  const classBalanceIndex =
+    classRates.length > 0
+      ? clampPercent(100 - (Math.max(...classRates) - Math.min(...classRates)))
+      : 0;
+  const selectedClassRow =
+    allowedClassRows.find((row) => row.name === selectedClassKey) || allowedClassRows[0];
+  const selectedClassRank = selectedClassRow
+    ? Math.max(
+        1,
+        allowedClassRows.findIndex((row) => row.name === selectedClassRow.name) + 1,
+      )
+    : 1;
+  const rankDelta = progressRate >= 78 ? "+2" : progressRate >= 68 ? "+1" : "持平";
+  const selectedStudent =
+    allowedStudentRows.find((row) => row.id === selectedStudentId) || allowedStudentRows[0];
+  const selectedStudentRank = selectedStudent
+    ? allowedStudentRows.findIndex((row) => row.id === selectedStudent.id) + 1
+    : 0;
+  const peerPosition =
+    selectedStudentRank > 0 && allowedStudentRows.length > 1
+      ? clampPercent((selectedStudentRank / allowedStudentRows.length) * 100)
+      : 35;
+  const weeklyTarget = 5;
+  const weeklyDone = Math.min(
+    weeklyTarget,
+    Math.max(0, Math.round(totalTimes / 4) || selectedStudent?.records || 0),
+  );
+  const trendValue = formatSignedPercent(Math.max(-12, (progressRate - 70) / 1.1));
+  const studentName = scopedStudents[0]?.name || targetLabel || "学生";
+
+  if (viewer.level === "medium") {
+    return {
+      eyebrow: "年级均衡驾驶舱",
+      title: `${targetLabel || viewer.gradeScope || "当前"}年级统计入口`,
+      metrics: [
+        {
+          label: "年级达成率",
+          value: `${completionRate}%`,
+          helper: "本年级整体完成情况",
+          tone: "blue",
+        },
+        {
+          label: "班级均衡指数",
+          value: `${classBalanceIndex}分`,
+          helper: "各班差距是否过大",
+          tone: "green",
+        },
+        {
+          label: "年级发展趋势",
+          value: trendValue,
+          helper: "较上月/上周变化",
+          tone: "orange",
+        },
+      ],
+      aiHint: "年级主任视角会优先分析班级差距、重点关注班级和低参与学生。",
+      aiPlaceholder: "问我：哪个班级拖慢了年级达标？",
+    };
+  }
+
+  if (viewer.level === "basic") {
+    return {
+      eyebrow: "班级执行驾驶舱",
+      title: `${targetLabel || selectedClassKey || "授权班级"}统计入口`,
+      metrics: [
+        {
+          label: "本班达成率",
+          value: `${completionRate}%`,
+          helper: "本班整体完成情况",
+          tone: "blue",
+        },
+        {
+          label: "年级位次变化",
+          value: `第${selectedClassRank}名`,
+          helper: `较上月 ${rankDelta}`,
+          tone: "green",
+        },
+        {
+          label: "待达标学生",
+          value: `${riskStudentCount}人`,
+          helper: "接下来重点推进",
+          tone: "rose",
+        },
+      ],
+      aiHint: "班级负责人视角会优先生成未达标学生、连续缺席学生和本班执行动作。",
+      aiPlaceholder: "问我：本班先提醒哪几名学生？",
+    };
+  }
+
+  if (viewer.level === "student") {
+    return {
+      eyebrow: "个人成长仪表盘",
+      title: `${studentName}个人统计入口`,
+      metrics: [
+        {
+          label: "本周完成度",
+          value: `${weeklyDone}/${weeklyTarget}次`,
+          helper: "有没有完成学校要求",
+          tone: "blue",
+        },
+        {
+          label: "体质成长趋势",
+          value: trendValue,
+          helper: "孩子是不是在进步",
+          tone: "green",
+        },
+        {
+          label: "同班水平对比",
+          value: `班级前${peerPosition}%`,
+          helper: "在同龄人中的位置",
+          tone: "orange",
+        },
+      ],
+      aiHint: "学生/家长视角会聚焦完成要求、成长趋势和同伴水平对比。",
+      aiPlaceholder: "问我：这周还差哪些运动任务？",
+    };
+  }
+
+  return {
+    eyebrow: "学校治理驾驶舱",
+    title: "全校统计入口",
+    metrics: [
+      {
+        label: "综合健康治理",
+        value: `${governanceIndex}分`,
+        helper: "全校体育健康整体水平",
+        tone: "green",
+      },
+      {
+        label: "政策落实率",
+        value: `${passRate}%`,
+        helper: "政策和任务是否落地",
+        tone: "blue",
+      },
+      {
+        label: "体质发展指数",
+        value: trendValue,
+        helper: "学生健康状态是否向好",
+        tone: "orange",
+      },
+    ],
+    aiHint: "校领导视角会优先生成全校治理判断、政策落实结论和发展趋势建议。",
+    aiPlaceholder: "问我：全校下月先抓哪三个问题？",
+  };
+}
+
+function clampPercent(value: number) {
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function formatSignedPercent(value: number) {
+  const rounded = Math.round(value * 10) / 10;
+  return `${rounded > 0 ? "+" : ""}${rounded}%`;
+}
+
+function getAttachmentKind(file: File): StatsAiAttachmentInput["kind"] {
+  if (file.type.startsWith("image/")) return "image";
+  if (file.type.startsWith("video/")) return "video";
+  if (file.type.startsWith("audio/")) return "audio";
+  return "file";
+}
+
+function getAttachmentLabel(kind: StatsAiAttachmentInput["kind"]) {
+  if (kind === "image") return "图片";
+  if (kind === "video") return "视频";
+  if (kind === "audio") return "音频";
+  return "文件";
+}
+
+function formatFileSize(size: number) {
+  if (size >= 1024 * 1024) return `${(size / 1024 / 1024).toFixed(1)}MB`;
+  if (size >= 1024) return `${Math.round(size / 1024)}KB`;
+  return `${size}B`;
+}
+
+function revokeAttachmentPreviews(attachments: AiAttachmentDraft[]) {
+  attachments.forEach((attachment) => {
+    if (attachment.previewUrl) URL.revokeObjectURL(attachment.previewUrl);
+  });
+}
+
+function getSpeechRecognitionConstructor() {
+  return window.SpeechRecognition || window.webkitSpeechRecognition;
+}
+
+function LeadershipSnapshotPanel({
+  viewerProfiles,
+  activeViewerId,
+  onViewerChange,
+  targetLabel,
+  monthLabel,
+  riskStudentCount,
+  snapshotConfig,
+  onViewData,
+  onGenerateReport,
+  isGenerating,
+  reportInput,
+}: {
+  viewerProfiles: ViewerProfile[];
+  activeViewerId: string;
+  onViewerChange: (viewerId: string) => void;
+  targetLabel: string;
+  monthLabel: string;
+  riskStudentCount: number;
+  snapshotConfig: RoleSnapshotConfig;
+  onViewData: () => void;
+  onGenerateReport: () => void;
+  isGenerating: boolean;
+  reportInput: StatsReportInput;
+}) {
+  const [aiMessage, setAiMessage] = useState("");
+  const [aiBusy, setAiBusy] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [attachments, setAttachments] = useState<AiAttachmentDraft[]>([]);
+  const [isUploadMenuOpen, setIsUploadMenuOpen] = useState(false);
+  const [aiMessages, setAiMessages] = useState<AiConversationMessage[]>(() => [
+    createStatsAiWelcomeMessage(targetLabel, monthLabel, riskStudentCount),
+  ]);
+  const aiContextKey = `${activeViewerId}-${targetLabel}-${monthLabel}`;
+  const latestAiContextKey = useRef(aiContextKey);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
+  const audioInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const aiTextInputRef = useRef<HTMLInputElement>(null);
+  const speechRecognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const speechBaseTextRef = useRef("");
+  const voiceHoldTimerRef = useRef<number | null>(null);
+  const voiceHoldActivatedRef = useRef(false);
+
+  useEffect(() => {
+    latestAiContextKey.current = aiContextKey;
+    setAiBusy(false);
+    setIsListening(false);
+    setAiMessage("");
+    setIsUploadMenuOpen(false);
+    if (voiceHoldTimerRef.current !== null) {
+      window.clearTimeout(voiceHoldTimerRef.current);
+      voiceHoldTimerRef.current = null;
+    }
+    voiceHoldActivatedRef.current = false;
+    speechRecognitionRef.current?.abort();
+    speechRecognitionRef.current = null;
+    setAttachments((current) => {
+      revokeAttachmentPreviews(current);
+      return [];
+    });
+    setAiMessages([createStatsAiWelcomeMessage(targetLabel, monthLabel, riskStudentCount)]);
+  }, [aiContextKey, monthLabel, riskStudentCount, targetLabel]);
+
+  useEffect(
+    () => () => {
+      if (voiceHoldTimerRef.current !== null) {
+        window.clearTimeout(voiceHoldTimerRef.current);
+      }
+      speechRecognitionRef.current?.abort();
+      speechRecognitionRef.current = null;
+    },
+    [],
+  );
+
+  const handleAttachmentPick = (
+    event: ChangeEvent<HTMLInputElement>,
+    fallbackKind: StatsAiAttachmentInput["kind"],
+  ) => {
+    const files = Array.from(event.currentTarget.files ?? []) as File[];
+    event.currentTarget.value = "";
+
+    if (files.length === 0) return;
+
+    const nextAttachments = files.map((file, index) => {
+      const kind = fallbackKind === "file" ? getAttachmentKind(file) : fallbackKind;
+      return {
+        id: `${Date.now()}-${index}-${file.name}`,
+        kind,
+        name: file.name,
+        type: file.type || "application/octet-stream",
+        size: file.size,
+        file,
+        previewUrl:
+          kind === "image" || kind === "video" || kind === "audio"
+            ? URL.createObjectURL(file)
+            : undefined,
+      };
+    });
+
+    setAttachments((current) => [...current, ...nextAttachments].slice(0, 6));
+    setIsUploadMenuOpen(false);
+    toast.success(`已添加 ${Math.min(files.length, 6)} 个附件`);
+  };
+
+  const handleRemoveAttachment = (attachmentId: string) => {
+    setAttachments((current) => {
+      const target = current.find((item) => item.id === attachmentId);
+      if (target?.previewUrl) URL.revokeObjectURL(target.previewUrl);
+      return current.filter((item) => item.id !== attachmentId);
+    });
+  };
+
+  const stopVoiceInput = () => {
+    speechRecognitionRef.current?.stop();
+    setIsListening(false);
+  };
+
+  const startVoiceInput = () => {
+    if (aiBusy || isListening) return;
+    const SpeechRecognition = getSpeechRecognitionConstructor();
+
+    if (!SpeechRecognition) {
+      toast.error("当前浏览器不支持语音识别，请使用 Chrome 或 Edge");
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      const baseText = aiMessage.trim();
+
+      speechBaseTextRef.current = baseText;
+      recognition.lang = "zh-CN";
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.maxAlternatives = 1;
+      recognition.onresult = (event) => {
+        const finalParts: string[] = [];
+        const interimParts: string[] = [];
+
+        for (let index = 0; index < event.results.length; index += 1) {
+          const result = event.results[index];
+          const transcript = result[0]?.transcript?.trim();
+          if (!transcript) continue;
+
+          if (result.isFinal) finalParts.push(transcript);
+          else interimParts.push(transcript);
+        }
+
+        const recognizedText = [...finalParts, ...interimParts].join("");
+        const nextMessage = [speechBaseTextRef.current, recognizedText]
+          .filter(Boolean)
+          .join(" ");
+
+        setAiMessage(nextMessage);
+      };
+      recognition.onerror = (event) => {
+        setIsListening(false);
+        speechRecognitionRef.current = null;
+
+        if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+          toast.error("麦克风权限被拒绝，请在浏览器地址栏允许麦克风");
+        } else if (event.error !== "no-speech") {
+          toast.error("语音识别失败，请再试一次");
+        }
+      };
+      recognition.onend = () => {
+        setIsListening(false);
+        speechRecognitionRef.current = null;
+      };
+
+      speechRecognitionRef.current = recognition;
+      setIsUploadMenuOpen(false);
+      setIsListening(true);
+      aiTextInputRef.current?.blur();
+      recognition.start();
+      toast("正在听你说话，松开输入栏结束语音输入", { icon: "语音" });
+    } catch {
+      setIsListening(false);
+      speechRecognitionRef.current = null;
+      toast.error("语音识别启动失败，请检查麦克风权限");
+    }
+  };
+
+  const handleInputBarPointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    if (aiBusy || event.button !== 0) return;
+
+    event.currentTarget.setPointerCapture(event.pointerId);
+    voiceHoldActivatedRef.current = false;
+    if (voiceHoldTimerRef.current !== null) {
+      window.clearTimeout(voiceHoldTimerRef.current);
+    }
+
+    voiceHoldTimerRef.current = window.setTimeout(() => {
+      voiceHoldActivatedRef.current = true;
+      voiceHoldTimerRef.current = null;
+      startVoiceInput();
+    }, 450);
+  };
+
+  const handleInputBarPointerEnd = (event: PointerEvent<HTMLDivElement>) => {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+
+    if (voiceHoldTimerRef.current !== null) {
+      window.clearTimeout(voiceHoldTimerRef.current);
+      voiceHoldTimerRef.current = null;
+    }
+
+    if (voiceHoldActivatedRef.current || isListening) {
+      stopVoiceInput();
+      voiceHoldActivatedRef.current = false;
+      return;
+    }
+
+    aiTextInputRef.current?.focus();
+  };
+
+  const handleInputBarPointerCancel = (event?: PointerEvent<HTMLDivElement>) => {
+    if (
+      event &&
+      event.currentTarget.hasPointerCapture(event.pointerId)
+    ) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+
+    if (voiceHoldTimerRef.current !== null) {
+      window.clearTimeout(voiceHoldTimerRef.current);
+      voiceHoldTimerRef.current = null;
+    }
+
+    if (voiceHoldActivatedRef.current || isListening) stopVoiceInput();
+    voiceHoldActivatedRef.current = false;
+  };
+
+  const handleAiSubmit = async () => {
+    const typedQuestion = aiMessage.trim();
+    const question =
+      typedQuestion ||
+      (attachments.length > 0
+        ? "请结合我上传的附件和当前统计数据，分析问题并给出处理建议。"
+        : "");
+
+    if (!question) {
+      toast("可以输入想追问的整改方向，或先上传图片、视频、音频、文件", {
+        icon: "AI",
+      });
+      return;
+    }
+
+    if (aiBusy) return;
+
+    const requestContextKey = aiContextKey;
+    const userMessage: AiConversationMessage = {
+      id: `${Date.now()}-user`,
+      role: "user",
+      text: question,
+      attachments,
+    };
+    const nextMessages = [...aiMessages, userMessage];
+
+    setAiMessages(nextMessages);
+    setAiMessage("");
+    speechRecognitionRef.current?.abort();
+    speechRecognitionRef.current = null;
+    setIsListening(false);
+    setAttachments([]);
+    setIsUploadMenuOpen(false);
+    setAiBusy(true);
+
+    try {
+      const reply = await askStatsAi(
+        reportInput,
+        question,
+        nextMessages.map(({ role, text }) => ({ role, text })),
+        attachments,
+      );
+
+      if (latestAiContextKey.current !== requestContextKey) return;
+
+      setAiMessages((current) => [
+        ...current,
+        {
+          id: `${Date.now()}-assistant`,
+          role: "assistant",
+          text: reply.text,
+          source: reply.source,
+        },
+      ]);
+      toast.success(
+        reply.source === "AI生成"
+          ? "AI建议已更新"
+          : "AI不可用，已给出本地分析建议",
+      );
+    } catch {
+      if (latestAiContextKey.current !== requestContextKey) return;
+
+      setAiMessages((current) => [
+        ...current,
+        {
+          id: `${Date.now()}-assistant-error`,
+          role: "assistant",
+          text: "暂时无法完成本次分析，请稍后再试。",
+          source: "本地分析",
+        },
+      ]);
+      toast.error("AI暂时不可用，请稍后再试");
+    } finally {
+      if (latestAiContextKey.current === requestContextKey) {
+        setAiBusy(false);
+      }
+    }
+  };
+
+  return (
+    <section className="overflow-hidden rounded-[32px] border border-white/80 bg-gradient-to-b from-white to-[#f5f7fb] p-4 shadow-[0_18px_45px_rgba(15,23,42,0.10)]">
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div>
+          <div className="text-[12px] font-semibold text-[#007aff]">
+            {snapshotConfig.eyebrow}
+          </div>
+          <h2 className="mt-1 text-[24px] font-black leading-tight text-[#111827]">
+            {snapshotConfig.title}
+          </h2>
+        </div>
+        <div className="rounded-full border border-gray-200/80 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-gray-500 shadow-sm">
+          {monthLabel}
+        </div>
+      </div>
+
+      <div className="mb-3 flex gap-2 overflow-x-auto rounded-[20px] bg-gray-100 p-1">
+        {viewerProfiles.map((profile) => {
+          const active = profile.id === activeViewerId;
+          return (
+            <button
+              key={profile.id}
+              type="button"
+              onClick={() => onViewerChange(profile.id)}
+              className={`shrink-0 rounded-[16px] px-3 py-2 text-left transition-colors ${
+                active
+                  ? "bg-white text-[#111827] shadow-sm"
+                  : "text-gray-500 active:bg-white/70"
+              }`}
+            >
+              <span className="block text-[12px] font-black leading-4">
+                {profile.name}
+              </span>
+              <span className="mt-0.5 block text-[9px] font-semibold opacity-60">
+                {profile.title}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="grid grid-cols-3 gap-2">
+        {snapshotConfig.metrics.map((metric) => (
+          <div
+            key={metric.label}
+            className={`flex min-h-[96px] flex-col justify-between rounded-[18px] border p-2.5 text-center shadow-[0_8px_20px_rgba(15,23,42,0.06)] ${
+              metric.tone === "green"
+                ? "border-emerald-100 bg-emerald-50 text-emerald-950"
+                : metric.tone === "rose"
+                  ? "border-rose-100 bg-rose-50 text-rose-950"
+                : metric.tone === "orange"
+                  ? "border-orange-100 bg-orange-50 text-orange-950"
+                  : "border-blue-100 bg-blue-50 text-blue-950"
+            }`}
+          >
+            <div className="text-[12px] font-bold leading-4">{metric.label}</div>
+            <div>
+              <div
+                className={`text-[24px] font-black leading-none ${
+                  metric.tone === "green"
+                    ? "text-[#34c759]"
+                    : metric.tone === "rose"
+                      ? "text-[#ef4444]"
+                    : metric.tone === "orange"
+                      ? "text-[#ff9500]"
+                      : "text-[#007aff]"
                 }`}
               >
-                {option.label}
-              </button>
+                {metric.value}
+              </div>
+              <div className="mt-1 text-[9px] font-semibold text-gray-500">
+                {metric.helper}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-3 grid gap-2">
+        <button
+          type="button"
+          onClick={onViewData}
+          className="h-12 rounded-full border border-gray-200 bg-white text-[16px] font-bold text-[#111827] shadow-[0_8px_20px_rgba(15,23,42,0.05)] active:bg-gray-50"
+        >
+          所有数据
+        </button>
+        <button
+          type="button"
+          onClick={onGenerateReport}
+          disabled={isGenerating}
+          className="flex h-12 items-center justify-center gap-2 rounded-full bg-[#007aff] text-[15px] font-bold text-white shadow-[0_12px_28px_rgba(0,122,255,0.28)] active:bg-[#006edc] disabled:opacity-70"
+        >
+          {isGenerating ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Sparkles className="h-4 w-4" />
+          )}
+          报告分析与解决方案生成
+        </button>
+      </div>
+
+      <div className="mt-3 flex min-h-[330px] flex-col rounded-[26px] border border-gray-200/80 bg-[#f5f5f7] p-4 shadow-inner">
+        <div className="text-center text-[16px] font-black text-[#111827]">
+          AI交互界面
+        </div>
+
+        <div className="mt-4 flex-1 space-y-3 overflow-y-auto pr-1">
+          {aiMessages.map((message) => (
+            <div
+              key={message.id}
+              className={`flex ${
+                message.role === "user" ? "justify-end" : "justify-start"
+              }`}
+            >
+              <div
+                className={`max-w-[88%] whitespace-pre-wrap rounded-[22px] px-4 py-3 text-[13px] leading-6 shadow-sm ${
+                  message.role === "user"
+                    ? "bg-[#007aff] text-white"
+                    : "bg-white text-[#111827]"
+                }`}
+              >
+                {message.role === "assistant" && message.source && (
+                  <div
+                    className={`mb-1 text-[10px] font-bold ${
+                      message.source === "AI生成"
+                        ? "text-[#007aff]"
+                        : "text-[#f59e0b]"
+                    }`}
+                  >
+                    {message.source}
+                  </div>
+                )}
+                {message.text}
+                {message.attachments && message.attachments.length > 0 && (
+                  <div className="mt-3 grid gap-2">
+                    {message.attachments.map((attachment) => (
+                      <div
+                        key={attachment.id}
+                        className={`flex items-center gap-2 rounded-2xl px-3 py-2 text-[11px] font-semibold ${
+                          message.role === "user"
+                            ? "bg-white/15 text-white"
+                            : "bg-gray-100 text-gray-600"
+                        }`}
+                      >
+                        <Paperclip className="h-3.5 w-3.5 shrink-0" />
+                        <span className="min-w-0 flex-1 truncate">
+                          {getAttachmentLabel(attachment.kind)} · {attachment.name}
+                        </span>
+                        <span className="shrink-0 opacity-80">
+                          {formatFileSize(attachment.size)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+
+          {aiBusy && (
+            <div className="flex justify-start">
+              <div className="flex max-w-[88%] items-center gap-2 rounded-[22px] bg-white px-4 py-3 text-[13px] font-semibold text-[#111827] shadow-sm">
+                <Loader2 className="h-4 w-4 animate-spin text-[#007aff]" />
+                正在结合当前统计数据生成建议...
+              </div>
+            </div>
+          )}
+        </div>
+
+        {attachments.length > 0 && (
+          <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+            {attachments.map((attachment) => (
+              <div
+                key={attachment.id}
+                className="flex max-w-[220px] shrink-0 items-center gap-2 rounded-2xl border border-gray-200 bg-white px-3 py-2 text-[12px] font-semibold text-gray-700 shadow-sm"
+              >
+                {attachment.kind === "image" ? (
+                  <ImageIcon className="h-4 w-4 shrink-0 text-[#007aff]" />
+                ) : attachment.kind === "video" ? (
+                  <Video className="h-4 w-4 shrink-0 text-[#ff9500]" />
+                ) : attachment.kind === "audio" ? (
+                  <Mic className="h-4 w-4 shrink-0 text-[#34c759]" />
+                ) : (
+                  <Paperclip className="h-4 w-4 shrink-0 text-gray-500" />
+                )}
+                <span className="min-w-0 flex-1 truncate">{attachment.name}</span>
+                <button
+                  type="button"
+                  onClick={() => handleRemoveAttachment(attachment.id)}
+                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-500 active:bg-gray-200"
+                  aria-label="移除附件"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
             ))}
           </div>
+        )}
 
-          <div className="mt-4 h-[232px] min-w-0">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart
-                data={trendData}
-                margin={{ top: 12, right: 8, left: -24, bottom: 0 }}
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={(event) => handleAttachmentPick(event, "image")}
+        />
+        <input
+          ref={imageInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={(event) => handleAttachmentPick(event, "image")}
+        />
+        <input
+          ref={videoInputRef}
+          type="file"
+          accept="video/*"
+          multiple
+          className="hidden"
+          onChange={(event) => handleAttachmentPick(event, "video")}
+        />
+        <input
+          ref={audioInputRef}
+          type="file"
+          accept="audio/*"
+          multiple
+          className="hidden"
+          onChange={(event) => handleAttachmentPick(event, "audio")}
+        />
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip"
+          multiple
+          className="hidden"
+          onChange={(event) => handleAttachmentPick(event, "file")}
+        />
+
+        <div className="relative mt-3 flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-2 shadow-[0_10px_28px_rgba(15,23,42,0.08)]">
+          {isUploadMenuOpen && (
+            <div className="absolute bottom-[54px] left-1 z-20 grid w-[184px] gap-1 rounded-2xl border border-gray-200 bg-white p-2 text-[13px] font-semibold text-gray-700 shadow-[0_16px_38px_rgba(15,23,42,0.16)]">
+              <button
+                type="button"
+                onClick={() => cameraInputRef.current?.click()}
+                className="flex h-10 items-center gap-2 rounded-xl px-3 text-left active:bg-blue-50"
               >
-                <CartesianGrid
-                  stroke="#eef2f7"
-                  strokeDasharray="3 7"
-                  vertical={false}
-                />
-                <XAxis
-                  dataKey="label"
-                  axisLine={false}
-                  tickLine={false}
-                  interval="preserveStartEnd"
-                  tick={{ fill: "#8a93a3", fontSize: 11 }}
-                />
-                <YAxis
-                  axisLine={false}
-                  tickLine={false}
-                  allowDecimals={false}
-                  tick={{ fill: "#c2c8d0", fontSize: 11 }}
-                  width={34}
-                />
-                <Tooltip
-                  formatter={(value, name) => [
-                    `${value}${name === "participants" ? "人" : name === "totalTimes" ? "次" : "条"}`,
-                    name === "participants"
-                      ? "参与学生"
-                      : name === "totalTimes"
-                        ? "完成次数"
-                        : "有效记录",
-                  ]}
-                  labelFormatter={(label) => `时间：${label}`}
-                  contentStyle={{
-                    border: "1px solid #e5e7eb",
-                    borderRadius: 8,
-                    boxShadow: "0 10px 24px rgba(30,41,59,0.12)",
-                  }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="totalTimes"
-                  name="完成次数"
-                  stroke="#1677ff"
-                  strokeWidth={3}
-                  dot={{ r: 3, fill: "#ffffff", stroke: "#1677ff", strokeWidth: 2 }}
-                  activeDot={{ r: 5 }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="participants"
-                  name="参与学生"
-                  stroke="#10b981"
-                  strokeWidth={3}
-                  dot={{ r: 3, fill: "#ffffff", stroke: "#10b981", strokeWidth: 2 }}
-                  activeDot={{ r: 5 }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="records"
-                  name="有效记录"
-                  stroke="#f59e0b"
-                  strokeWidth={2}
-                  dot={false}
-                  activeDot={{ r: 4 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
+                <Camera className="h-4 w-4 text-[#007aff]" />
+                拍照上传
+              </button>
+              <button
+                type="button"
+                onClick={() => imageInputRef.current?.click()}
+                className="flex h-10 items-center gap-2 rounded-xl px-3 text-left active:bg-blue-50"
+              >
+                <ImageIcon className="h-4 w-4 text-[#007aff]" />
+                上传图片
+              </button>
+              <button
+                type="button"
+                onClick={() => videoInputRef.current?.click()}
+                className="flex h-10 items-center gap-2 rounded-xl px-3 text-left active:bg-orange-50"
+              >
+                <Video className="h-4 w-4 text-[#ff9500]" />
+                上传视频
+              </button>
+              <button
+                type="button"
+                onClick={() => audioInputRef.current?.click()}
+                className="flex h-10 items-center gap-2 rounded-xl px-3 text-left active:bg-emerald-50"
+              >
+                <Mic className="h-4 w-4 text-[#34c759]" />
+                上传音频
+              </button>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="flex h-10 items-center gap-2 rounded-xl px-3 text-left active:bg-gray-50"
+              >
+                <Paperclip className="h-4 w-4 text-gray-500" />
+                上传文件
+              </button>
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => setIsUploadMenuOpen((current) => !current)}
+            disabled={aiBusy}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-600 shadow-sm active:bg-gray-200 disabled:opacity-70"
+            aria-label="打开上传菜单"
+          >
+            <Plus className={`h-4 w-4 transition-transform ${isUploadMenuOpen ? "rotate-45" : ""}`} />
+          </button>
+          <div
+            role="button"
+            tabIndex={0}
+            onPointerDown={handleInputBarPointerDown}
+            onPointerUp={handleInputBarPointerEnd}
+            onPointerLeave={handleInputBarPointerCancel}
+            onPointerCancel={handleInputBarPointerCancel}
+            onContextMenu={(event) => {
+              if (isListening || voiceHoldActivatedRef.current) event.preventDefault();
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") aiTextInputRef.current?.focus();
+            }}
+            className={`flex min-w-0 flex-1 select-none items-center gap-2 rounded-full px-1 transition-colors ${
+              isListening
+                ? "bg-[#ff3b30]/10 text-[#ff3b30]"
+                : "text-gray-500 active:bg-gray-50"
+            }`}
+            aria-label="短按输入文字，长按语音输入"
+          >
+            {isListening && (
+              <span className="relative flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#ff3b30] text-white">
+                <span className="absolute inset-0 rounded-full bg-[#ff3b30]/35 animate-ping" />
+                <Mic className="relative h-3.5 w-3.5" />
+              </span>
+            )}
+            <input
+              ref={aiTextInputRef}
+              value={aiMessage}
+              readOnly={isListening}
+              onChange={(event) => setAiMessage(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !aiBusy) handleAiSubmit();
+              }}
+              placeholder={
+                isListening
+                  ? "松开结束语音输入..."
+                  : "短按输入，长按说话"
+              }
+              className="min-w-0 flex-1 bg-transparent text-[14px] font-semibold text-[#111827] outline-none placeholder:text-gray-400"
+            />
           </div>
+          <button
+            type="button"
+            onClick={handleAiSubmit}
+            disabled={aiBusy}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#007aff] text-white shadow-sm disabled:opacity-70"
+            aria-label="发送AI追问"
+          >
+            {aiBusy ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
 
-          <div className="mt-2 flex flex-wrap items-center justify-center gap-4 text-[12px] text-gray-500">
-            <LegendDot color="#1677ff" label="完成次数" />
-            <LegendDot color="#10b981" label="参与学生" />
-            <LegendDot color="#f59e0b" label="有效记录" />
+function ReportPreviewModal({
+  report,
+  onClose,
+  onRegenerate,
+  isRegenerating,
+}: {
+  report: StatsReport;
+  onClose: () => void;
+  onRegenerate: () => void | Promise<void>;
+  isRegenerating: boolean;
+}) {
+  const handlePrint = () => {
+    const previousTitle = document.title;
+    const restoreTitle = () => {
+      document.title = previousTitle;
+      window.removeEventListener("afterprint", restoreTitle);
+    };
+
+    document.title = report.title;
+    window.addEventListener("afterprint", restoreTitle);
+    setTimeout(() => {
+      window.print();
+      setTimeout(restoreTitle, 1000);
+    }, 50);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[90] flex items-end bg-gray-950/45 px-3 pb-3 pt-10">
+      <div className="max-h-[88vh] w-full overflow-hidden rounded-lg bg-white shadow-2xl">
+        <div className="report-modal-actions flex items-start justify-between gap-3 border-b border-gray-100 p-4">
+          <div className="min-w-0">
+            <div className="text-[12px] font-semibold text-[#1677ff]">
+              {report.badge} · {report.source}
+            </div>
+            <h3 className="mt-0.5 text-[18px] font-bold leading-6 text-gray-950">
+              报告预览
+            </h3>
           </div>
-        </section>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-500 active:bg-gray-200"
+            aria-label="关闭报告预览"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
 
-        <section className="rounded-lg border border-gray-100 bg-white p-4 shadow-sm">
-          <SectionTitle
-            icon={<Layers3 className="h-4 w-4" />}
-            title="分类统计"
-            aside="完成次数"
+        <div className="max-h-[calc(88vh-142px)] overflow-y-auto bg-gray-100 p-3">
+          <ReportScreenDocument report={report} />
+          <ReportPrintDocument report={report} />
+        </div>
+
+        <div className="report-modal-actions grid grid-cols-3 gap-2 border-t border-gray-100 bg-white p-3">
+          <button
+            type="button"
+            onClick={onRegenerate}
+            disabled={isRegenerating}
+            className="flex h-10 items-center justify-center gap-1.5 rounded-lg bg-gray-100 text-[13px] font-bold text-gray-700 active:bg-gray-200 disabled:opacity-70"
+          >
+            {isRegenerating ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4" />
+            )}
+            重生成
+          </button>
+          <button
+            type="button"
+            onClick={handlePrint}
+            className="col-span-2 flex h-10 items-center justify-center gap-1.5 rounded-lg bg-[#1677ff] text-[13px] font-bold text-white active:bg-[#0958d9]"
+          >
+            <Printer className="h-4 w-4" />
+            导出PDF
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ReportScreenDocument({ report }: { report: StatsReport }) {
+  return (
+    <article className="report-screen-document rounded-lg bg-white p-4 text-gray-950">
+      <ReportDocumentBody report={report} />
+    </article>
+  );
+}
+
+function ReportPrintDocument({ report }: { report: StatsReport }) {
+  const visualPages = chunkArray(report.visuals, 2);
+  const sectionPages = buildReportSectionPages(report.sections);
+  let pageNumber = 1;
+
+  return (
+    <article className="report-print-document text-gray-950">
+      <ReportPage pageNumber={pageNumber++}>
+        <ReportCoverHeader report={report} />
+        <ReportExecutiveSummary report={report} />
+        <ReportKpiSection report={report} />
+      </ReportPage>
+
+      {visualPages.map((visuals, index) => (
+        <ReportPage key={`visual-page-${index}`} pageNumber={pageNumber++}>
+          <ReportBlockHeader
+            title="图表诊断"
+            badge="数据可视化"
+            description="按完整图表卡片分页，避免雷达图、柱状图在页面中间被切开。"
           />
-          <div className="mt-4 space-y-3">
-            {categoryRows.map((item) => (
-              <ProgressRow
-                key={item.name}
-                label={item.name}
-                value={item.totalTimes}
-                helper={`${item.participants}人参与 / 目标 ${item.target}次`}
-                max={maxCategoryTimes}
+          <div className="mt-3 grid gap-3">
+            {visuals.map((visual) => (
+              <ReportVisualCard
+                key={`${visual.kind}-${visual.title}`}
+                visual={visual}
               />
             ))}
           </div>
-        </section>
+        </ReportPage>
+      ))}
 
-        <section className="rounded-lg border border-gray-100 bg-white p-4 shadow-sm">
-          <SectionTitle
-            icon={<BarChart3 className="h-4 w-4" />}
-            title={
-              dataScope === "school"
-                ? "年级数据"
-                : dataScope === "grade"
-                  ? "班级数据"
-                  : dataScope === "class"
-                    ? "学生数据"
-                    : "个人项目"
-            }
-            aside="当前层级"
+      {sectionPages.map((sections, index) => (
+        <ReportPage key={`section-page-${index}`} pageNumber={pageNumber++}>
+          <ReportBlockHeader
+            title="文字说明与整改闭环"
+            badge={index === 0 ? "可汇报" : "续页"}
+            description="AI 结论、整改动作和统计依据按内容长度自动拆页。"
           />
-          <div className="mt-4 space-y-3">
-            {drillRows.length === 0 ? (
-              <div className="rounded-lg bg-gray-50 py-10 text-center text-[13px] text-gray-400">
-                当前范围暂无统计数据
-              </div>
-            ) : (
-              drillRows.map((row, index) => (
-                <DrillRow
-                  key={row.id || row.name}
-                  row={row}
-                  rank={index + 1}
-                  scope={dataScope}
-                />
-              ))
-            )}
-          </div>
-        </section>
+          <ReportSectionsList sections={sections} />
+        </ReportPage>
+      ))}
+    </article>
+  );
+}
 
-        <section className="rounded-lg border border-gray-100 bg-white p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <SectionTitle
-              icon={<Activity className="h-4 w-4" />}
-              title="项目数据"
-              aside="项目维度"
-            />
-            <button
-              onClick={() => navigate("/stats/projects")}
-              className="flex items-center gap-1 text-[13px] font-medium text-[#1677ff]"
-            >
-              更多
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          </div>
-          <div className="mt-4 space-y-2">
-            {projectRows.length === 0 ? (
-              <div className="rounded-lg bg-gray-50 py-8 text-center text-[13px] text-gray-400">
-                当前范围暂无项目数据
+function ReportDocumentBody({ report }: { report: StatsReport }) {
+  return (
+    <>
+      <ReportCoverHeader report={report} />
+      <ReportExecutiveSummary report={report} />
+      <ReportKpiSection report={report} />
+
+      {report.visuals.length > 0 && (
+        <ReportBlockHeader title="图表诊断" badge="数据可视化" />
+      )}
+
+      {report.visuals.length > 0 && (
+        <div className="mt-2 grid gap-3">
+          {report.visuals.map((visual) => (
+            <ReportVisualCard key={`${visual.kind}-${visual.title}`} visual={visual} />
+          ))}
+        </div>
+      )}
+
+      <ReportBlockHeader title="文字说明与整改闭环" badge="可汇报" />
+      <ReportSectionsList sections={report.sections} />
+    </>
+  );
+}
+
+function ReportPage({
+  pageNumber,
+  children,
+}: {
+  key?: string | number;
+  pageNumber: number;
+  children: ReactNode;
+}) {
+  return (
+    <section className="report-page">
+      <div className="report-page-watermark">
+        {String(pageNumber).padStart(2, "0")}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function ReportBlockHeader({
+  title,
+  badge,
+  description,
+}: {
+  title: string;
+  badge: string;
+  description?: string;
+}) {
+  return (
+    <div className="mt-5 flex items-start justify-between gap-3">
+      <div>
+        <h2 className="text-[16px] font-bold leading-6">{title}</h2>
+        {description && (
+          <p className="mt-0.5 text-[11px] leading-4 text-gray-500">
+            {description}
+          </p>
+        )}
+      </div>
+      <span className="shrink-0 rounded bg-gray-100 px-2 py-1 text-[10px] font-bold text-gray-500">
+        {badge}
+      </span>
+    </div>
+  );
+}
+
+function ReportKpiSection({ report }: { report: StatsReport }) {
+  return (
+    <>
+      <ReportBlockHeader title="领导核心数据" badge="一眼判断" />
+      <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {report.kpis.map((item) => (
+          <div key={item.label} className="rounded-lg bg-gray-50 p-3">
+            <div className="text-[11px] font-medium text-gray-500">
+              {item.label}
+            </div>
+            <div className="mt-1 text-[20px] font-bold leading-none">
+              {item.value}
+            </div>
+            {item.helper && (
+              <div className="mt-1 text-[10px] text-gray-400">
+                {item.helper}
               </div>
-            ) : (
-              projectRows.slice(0, 8).map((project) => (
-                <button
-                  key={project.id}
-                  onClick={() => navigate(`/stats/projects/${project.id}`)}
-                  className="flex w-full items-center justify-between rounded-lg bg-gray-50 px-3 py-3 text-left active:bg-gray-100"
-                >
-                  <div className="min-w-0">
-                    <div className="truncate text-[14px] font-bold text-gray-900">
-                      {project.name}
-                    </div>
-                    <div className="mt-0.5 text-[11px] text-gray-500">
-                      {project.category} · {project.participants}人参与
-                    </div>
-                  </div>
-                  <div className="shrink-0 text-[15px] font-bold text-[#1677ff]">
-                    {project.totalTimes}次
-                  </div>
-                </button>
-              ))
             )}
           </div>
-        </section>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function ReportSectionsList({ sections }: { sections: ReportSection[] }) {
+  return (
+    <div className="mt-5 space-y-5">
+      {sections.map((section, sectionIndex) => (
+        <ReportSectionBlock
+          key={`${section.title}-${sectionIndex}`}
+          section={section}
+        />
+      ))}
+    </div>
+  );
+}
+
+function ReportSectionBlock({
+  section,
+}: {
+  key?: string | number;
+  section: ReportSection;
+}) {
+  return (
+    <section className="report-section-block">
+      <h2 className="text-[16px] font-bold leading-6">{section.title}</h2>
+      {section.paragraphs && (
+        <div className="mt-2 space-y-2 text-[13px] leading-6 text-gray-700">
+          {section.paragraphs.map((paragraph) => (
+            <p key={paragraph}>{paragraph}</p>
+          ))}
+        </div>
+      )}
+      {section.bullets && (
+        <ul className="mt-2 space-y-1.5 text-[13px] leading-5 text-gray-700">
+          {section.bullets.map((bullet) => (
+            <li key={bullet} className="flex gap-2">
+              <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[#1677ff]" />
+              <span>{bullet}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {section.rows && section.rows.length > 0 && (
+        <div className="mt-3 overflow-x-auto rounded-lg border border-gray-100">
+          <table className="w-full min-w-[420px] text-left text-[11px]">
+            <thead className="bg-gray-50 text-gray-500">
+              <tr>
+                {Object.keys(section.rows[0]).map((key) => (
+                  <th key={key} className="px-2 py-2 font-semibold">
+                    {key}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {section.rows.map((row, rowIndex) => (
+                <tr key={rowIndex} className="border-t border-gray-100">
+                  {Object.values(row).map((value, valueIndex) => (
+                    <td key={valueIndex} className="px-2 py-2">
+                      {value}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function buildReportSectionPages(sections: ReportSection[]) {
+  const normalized = sections.flatMap(splitOversizedReportSection);
+  const pages: ReportSection[][] = [];
+  let currentPage: ReportSection[] = [];
+  let currentWeight = 0;
+  const maxPageWeight = 30;
+
+  normalized.forEach((section) => {
+    const weight = getReportSectionWeight(section);
+    const shouldStartNewPage =
+      currentPage.length > 0 && currentWeight + weight > maxPageWeight;
+
+    if (shouldStartNewPage) {
+      pages.push(currentPage);
+      currentPage = [];
+      currentWeight = 0;
+    }
+
+    currentPage.push(section);
+    currentWeight += weight;
+  });
+
+  if (currentPage.length > 0) pages.push(currentPage);
+
+  return pages.length > 0 ? pages : [[]];
+}
+
+function splitOversizedReportSection(section: ReportSection): ReportSection[] {
+  if (section.rows && section.rows.length > 8) {
+    return chunkArray(section.rows, 8).map((rows, index) => ({
+      ...section,
+      title: index === 0 ? section.title : `${section.title}（续 ${index + 1}）`,
+      paragraphs: index === 0 ? section.paragraphs : undefined,
+      bullets: index === 0 ? section.bullets : undefined,
+      rows,
+    }));
+  }
+
+  if (section.bullets && section.bullets.length > 6) {
+    return chunkArray(section.bullets, 6).map((bullets, index) => ({
+      ...section,
+      title: index === 0 ? section.title : `${section.title}（续 ${index + 1}）`,
+      paragraphs: index === 0 ? section.paragraphs : undefined,
+      bullets,
+    }));
+  }
+
+  return [section];
+}
+
+function getReportSectionWeight(section: ReportSection) {
+  const paragraphWeight =
+    section.paragraphs?.reduce(
+      (sum, paragraph) => sum + Math.max(2, Math.ceil(paragraph.length / 56)),
+      0,
+    ) ?? 0;
+  const bulletWeight =
+    section.bullets?.reduce(
+      (sum, bullet) => sum + Math.max(1.5, Math.ceil(bullet.length / 42)),
+      0,
+    ) ?? 0;
+  const rowWeight = section.rows ? 4 + section.rows.length * 2 : 0;
+
+  return 4 + paragraphWeight + bulletWeight + rowWeight;
+}
+
+function chunkArray<T>(items: T[], size: number) {
+  const chunks: T[][] = [];
+
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+
+  return chunks;
+}
+
+function ReportCoverHeader({ report }: { report: StatsReport }) {
+  return (
+    <div className="overflow-hidden rounded-lg border border-gray-100">
+      <div className="flex items-start justify-between gap-4 bg-gray-950 p-4 text-white">
+        <div className="min-w-0">
+          <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-blue-200">
+            Campus Sports Health
+          </div>
+          <h1 className="mt-2 text-[24px] font-black leading-8">
+            {report.title}
+          </h1>
+          <p className="mt-2 max-w-[760px] text-[12px] leading-5 text-gray-300">
+            {report.subtitle}
+          </p>
+        </div>
+        <div className="shrink-0 text-right">
+          <div className="text-[20px] font-bold text-blue-200">AI Report</div>
+          <div className="mt-1 rounded bg-white/10 px-2 py-1 text-[10px] font-semibold text-gray-200">
+            {report.badge}
+          </div>
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-2 bg-gray-50 px-4 py-3 text-[11px] text-gray-500">
+        <span className="rounded bg-white px-2 py-1 shadow-sm">
+          生成时间：{report.generatedAt}
+        </span>
+        <span className="rounded bg-white px-2 py-1 shadow-sm">
+          来源：{report.source}
+        </span>
+        <span className="rounded bg-white px-2 py-1 shadow-sm">
+          结构：政策判断 / 结论 / 优缺点 / 整改 / 追踪
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function ReportExecutiveSummary({ report }: { report: StatsReport }) {
+  const conclusion = getReportSection(report, "综合结论");
+  const advantage = getReportSection(report, "优点");
+  const risk = getReportSection(report, "缺陷") || getReportSection(report, "风险");
+  const suggestion = getReportSection(report, "整改建议");
+  const policy = getReportSection(report, "政策落实");
+  const mainText =
+    conclusion?.paragraphs?.[0] ||
+    policy?.paragraphs?.[0] ||
+    policy?.bullets?.[0] ||
+    "本报告依据当前统计数据生成学校体育与学生健康治理判断。";
+  const cards = [
+    {
+      label: "本月亮点",
+      title: "优点",
+      text: advantage?.bullets?.[0] || "基础数据与统计链路已形成，可支撑月度监测。",
+      color: "#10b981",
+    },
+    {
+      label: "主要短板",
+      title: "风险",
+      text: risk?.bullets?.[0] || "需要继续关注低参与、低达标和数据缺口。",
+      color: "#ef4444",
+    },
+    {
+      label: "管理动作",
+      title: "整改",
+      text: suggestion?.bullets?.[0] || "建议建立重点对象清单并按周复盘。",
+      color: "#1677ff",
+    },
+  ];
+
+  return (
+    <section className="mt-4 grid gap-3 lg:grid-cols-[1.15fr_1fr]">
+      <div className="rounded-lg bg-blue-50 p-4">
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-[#1677ff]" />
+          <span className="text-[12px] font-bold text-[#1677ff]">
+            AI本月综合判断
+          </span>
+        </div>
+        <p className="mt-2 text-[18px] font-black leading-7 text-gray-950">
+          {mainText}
+        </p>
+        {policy?.bullets && (
+          <div className="mt-3 grid gap-2 text-[12px] leading-5 text-gray-600">
+            {policy.bullets.slice(0, 2).map((item) => (
+              <div key={item} className="rounded bg-white px-3 py-2">
+                {item}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="grid gap-2">
+        {cards.map((card) => (
+          <div
+            key={card.title}
+            className="grid grid-cols-[5px_1fr] overflow-hidden rounded-lg border border-gray-100 bg-white shadow-sm"
+          >
+            <div style={{ backgroundColor: card.color }} />
+            <div className="p-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-bold text-gray-400">
+                  {card.label}
+                </span>
+                <span
+                  className="rounded px-2 py-0.5 text-[10px] font-bold text-white"
+                  style={{ backgroundColor: card.color }}
+                >
+                  {card.title}
+                </span>
+              </div>
+              <p className="mt-1 text-[12px] font-semibold leading-5 text-gray-800">
+                {card.text}
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function getReportSection(report: StatsReport, keyword: string) {
+  return report.sections.find((section) => section.title.includes(keyword));
+}
+
+function ReportVisualCard({ visual }: { key?: string; visual: ReportVisual }) {
+  return (
+    <section className="report-visual-card min-w-0 rounded-lg border border-gray-100 bg-white p-3 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-[15px] font-bold leading-5 text-gray-950">
+            {visual.title}
+          </h2>
+          <p className="mt-0.5 text-[11px] leading-4 text-gray-500">
+            {visual.subtitle}
+          </p>
+        </div>
+      </div>
+
+      {visual.kind === "donut" && <DonutVisual visual={visual} />}
+      {visual.kind === "bar" && <BarVisual visual={visual} />}
+      {visual.kind === "radar" && <RadarVisual visual={visual} />}
+      {visual.kind === "stacked" && <StackedVisual visual={visual} />}
+    </section>
+  );
+}
+
+function DonutVisual({
+  visual,
+}: {
+  visual: Extract<ReportVisual, { kind: "donut" }>;
+}) {
+  const total = visual.data.reduce((sum, item) => sum + item.value, 0);
+  let start = 0;
+  const gradient =
+    total > 0
+      ? visual.data
+          .map((item) => {
+            const angle = (item.value / total) * 360;
+            const segment = `${item.color} ${start}deg ${start + angle}deg`;
+            start += angle;
+            return segment;
+          })
+          .join(", ")
+      : "#e5e7eb 0deg 360deg";
+
+  return (
+    <div className="mt-3 grid grid-cols-[150px_1fr] items-center gap-2">
+      <div className="relative h-[150px] min-w-0">
+        <div
+          className="absolute left-1/2 top-1/2 h-[132px] w-[132px] -translate-x-1/2 -translate-y-1/2 rounded-full"
+          style={{ background: `conic-gradient(${gradient})` }}
+        />
+        <div className="absolute left-1/2 top-1/2 h-[76px] w-[76px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-inner" />
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
+          <div className="text-[20px] font-black leading-none text-gray-950">
+            {visual.centerValue}
+          </div>
+          <div className="mt-1 text-[10px] font-medium text-gray-400">
+            {visual.centerLabel}
+          </div>
+        </div>
+      </div>
+      <div className="space-y-2">
+        {visual.data.map((item) => (
+          <div key={item.name} className="flex items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-2">
+              <span
+                className="h-2.5 w-2.5 shrink-0 rounded-full"
+                style={{ backgroundColor: item.color }}
+              />
+              <span className="truncate text-[12px] font-medium text-gray-600">
+                {item.name}
+              </span>
+            </div>
+            <span className="text-[12px] font-bold text-gray-950">
+              {item.value}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function BarVisual({
+  visual,
+}: {
+  visual: Extract<ReportVisual, { kind: "bar" }>;
+}) {
+  const maxValue = Math.max(1, ...visual.data.map((item) => item.value));
+
+  return (
+    <div className="mt-3 overflow-x-auto pb-1">
+      <div
+        className="grid h-[210px] items-end gap-2 border-b border-gray-100"
+        style={{
+          gridTemplateColumns: `repeat(${visual.data.length}, minmax(34px, 1fr))`,
+          minWidth: Math.max(360, visual.data.length * 48),
+        }}
+      >
+        {visual.data.map((item) => {
+          const height = Math.max(6, Math.round((item.value / maxValue) * 150));
+          return (
+            <div key={item.name} className="flex h-full min-w-0 flex-col justify-end">
+              <div className="mb-1 text-center text-[10px] font-bold text-gray-600">
+                {item.value}
+                {visual.unit}
+              </div>
+              <div className="flex h-[150px] items-end justify-center">
+                <div
+                  className="w-full max-w-[28px] rounded-t-md"
+                  style={{
+                    height,
+                    backgroundColor: item.color || "#1677ff",
+                  }}
+                />
+              </div>
+              <div className="mt-2 h-8 text-center text-[9px] leading-3 text-gray-500">
+                {item.name}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function RadarVisual({
+  visual,
+}: {
+  visual: Extract<ReportVisual, { kind: "radar" }>;
+}) {
+  const size = 220;
+  const center = size / 2;
+  const radius = 76;
+  const angleStep = (Math.PI * 2) / Math.max(1, visual.data.length);
+  const getPoint = (index: number, value: number, extra = 0) => {
+    const angle = -Math.PI / 2 + index * angleStep;
+    const currentRadius = radius * value + extra;
+    return {
+      x: center + Math.cos(angle) * currentRadius,
+      y: center + Math.sin(angle) * currentRadius,
+    };
+  };
+  const polygonPoints = visual.data
+    .map((item, index) => {
+      const point = getPoint(index, Math.min(100, item.value) / 100);
+      return `${point.x},${point.y}`;
+    })
+    .join(" ");
+  const gridLevels = [0.25, 0.5, 0.75, 1];
+
+  return (
+    <div className="mt-3 flex justify-center">
+      <svg
+        viewBox={`0 0 ${size} ${size}`}
+        className="h-[230px] w-full max-w-[280px]"
+        role="img"
+        aria-label={visual.title}
+      >
+        {gridLevels.map((level) => (
+          <polygon
+            key={level}
+            points={visual.data
+              .map((_, index) => {
+                const point = getPoint(index, level);
+                return `${point.x},${point.y}`;
+              })
+              .join(" ")}
+            fill="none"
+            stroke="#e5e7eb"
+            strokeWidth="1"
+          />
+        ))}
+        {visual.data.map((item, index) => {
+          const end = getPoint(index, 1);
+          const label = getPoint(index, 1, 20);
+          return (
+            <g key={item.name}>
+              <line
+                x1={center}
+                y1={center}
+                x2={end.x}
+                y2={end.y}
+                stroke="#eef2f7"
+                strokeWidth="1"
+              />
+              <text
+                x={label.x}
+                y={label.y}
+                textAnchor="middle"
+                dominantBaseline="middle"
+                fontSize="10"
+                fill="#4b5563"
+              >
+                {item.name}
+              </text>
+            </g>
+          );
+        })}
+        <polygon
+          points={polygonPoints}
+          fill="#1677ff"
+          fillOpacity="0.26"
+          stroke="#1677ff"
+          strokeWidth="2"
+        />
+        {visual.data.map((item, index) => {
+          const point = getPoint(index, Math.min(100, item.value) / 100);
+          return <circle key={item.name} cx={point.x} cy={point.y} r="3" fill="#1677ff" />;
+        })}
+      </svg>
+    </div>
+  );
+}
+
+function StackedVisual({
+  visual,
+}: {
+  visual: Extract<ReportVisual, { kind: "stacked" }>;
+}) {
+  const priorityStyle = {
+    高: "bg-red-50 text-red-600 ring-red-100",
+    中: "bg-amber-50 text-amber-600 ring-amber-100",
+    低: "bg-emerald-50 text-emerald-600 ring-emerald-100",
+  };
+
+  return (
+    <div className="mt-3">
+      <div className="space-y-3">
+        {visual.data.map((row) => {
+          const total = Math.max(1, row.达标 + row.待提升 + row.风险);
+          const segments = [
+            { key: "达标", value: row.达标, color: "#10b981" },
+            { key: "待提升", value: row.待提升, color: "#f59e0b" },
+            { key: "风险", value: row.风险, color: "#ef4444" },
+          ];
+          return (
+            <div
+              key={row.name}
+              className="rounded-xl border border-gray-100 bg-gray-50/70 p-3"
+            >
+              <div className="mb-2 flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-bold text-gray-800">{row.name}</span>
+                    {row.priority && (
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-black ring-1 ${
+                          priorityStyle[row.priority]
+                        }`}
+                      >
+                        {row.priority}优先级
+                      </span>
+                    )}
+                  </div>
+                  {row.insight && (
+                    <p className="mt-1 text-[11px] leading-4 text-gray-500">
+                      {row.insight}
+                    </p>
+                  )}
+                </div>
+                <span className="shrink-0 rounded bg-white px-2 py-1 text-[10px] font-bold text-gray-400 shadow-sm">
+                  合计 {total}
+                  {visual.unit}
+                </span>
+              </div>
+              <div className="flex h-8 overflow-hidden rounded-md bg-gray-100">
+                {segments.map((segment) => (
+                  <div
+                    key={segment.key}
+                    className="flex items-center justify-center text-[10px] font-bold text-white"
+                    style={{
+                      width: `${(segment.value / total) * 100}%`,
+                      minWidth: segment.value > 0 ? 16 : 0,
+                      backgroundColor: segment.color,
+                    }}
+                  >
+                    {segment.value > 0 ? segment.value : ""}
+                  </div>
+                ))}
+              </div>
+              {row.action && (
+                <div className="mt-2 rounded-lg bg-white px-3 py-2 text-[11px] font-semibold leading-4 text-gray-700">
+                  建议动作：{row.action}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-3 flex justify-center gap-4 text-[11px] text-gray-500">
+        <LegendDot color="#10b981" label="达标" />
+        <LegendDot color="#f59e0b" label="待提升" />
+        <LegendDot color="#ef4444" label="风险" />
       </div>
     </div>
   );
@@ -1474,7 +3434,7 @@ function TopLevelAnalyticsPanel({
   if (!activeCategory) return null;
 
   return (
-    <section className="rounded-lg border border-gray-100 bg-white p-4 shadow-sm">
+    <div className="mt-5 border-t border-gray-100 pt-4">
       <div className="rounded-lg bg-gray-950 p-4 text-white">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -1553,7 +3513,7 @@ function TopLevelAnalyticsPanel({
 
       <TopAnalyticsCard category={activeCategory} />
       {showGuide && <CollectionGuideModal onClose={() => setShowGuide(false)} />}
-    </section>
+    </div>
   );
 }
 
@@ -1835,6 +3795,73 @@ function KpiCard({
         <span className="pb-0.5 text-[12px] text-gray-400">{unit}</span>
       </div>
     </div>
+  );
+}
+
+function CollapsibleStatsSection({
+  id,
+  icon,
+  title,
+  aside,
+  children,
+  defaultOpen = false,
+  headerAction,
+  forceOpenSignal = 0,
+}: {
+  id?: string;
+  icon: ReactNode;
+  title: ReactNode;
+  aside?: ReactNode;
+  children: ReactNode;
+  defaultOpen?: boolean;
+  headerAction?: ReactNode;
+  forceOpenSignal?: number;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+
+  useEffect(() => {
+    if (forceOpenSignal > 0) {
+      setOpen(true);
+    }
+  }, [forceOpenSignal]);
+
+  return (
+    <section id={id} className="rounded-lg border border-gray-100 bg-white p-4 shadow-sm">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-[#1677ff]">
+            {icon}
+          </div>
+          <div className="min-w-0">
+            <h2 className="truncate text-[16px] font-bold text-gray-950">
+              {title}
+            </h2>
+            {aside && (
+              <div className="mt-0.5 truncate text-[11px] font-medium text-gray-400">
+                {aside}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-2">
+          {headerAction}
+          <button
+            type="button"
+            onClick={() => setOpen((value) => !value)}
+            aria-expanded={open}
+            aria-label={open ? "收起板块" : "展开板块"}
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-gray-500 transition active:bg-gray-200"
+          >
+            <ChevronDown
+              className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`}
+            />
+          </button>
+        </div>
+      </div>
+
+      {open && <div className="mt-4">{children}</div>}
+    </section>
   );
 }
 

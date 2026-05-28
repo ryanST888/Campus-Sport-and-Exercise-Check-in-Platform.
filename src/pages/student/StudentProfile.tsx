@@ -2,21 +2,22 @@ import { type ReactNode, useMemo, useState } from "react";
 import { format, startOfWeek, subWeeks } from "date-fns";
 import {
   Activity,
-  Award,
+  BellRing,
   Calendar,
   CheckCircle2,
   ChevronRight,
   Flame,
   Footprints,
-  Medal,
+  HeartPulse,
   Moon,
-  Rocket,
   Settings,
+  ShieldCheck,
   Sparkles,
   Star,
   Sun,
   Target,
   Trophy,
+  Users,
   X,
   Zap,
 } from "lucide-react";
@@ -40,7 +41,7 @@ const WEEK_TARGET = 5;
 const STUDENT_THEME_STORAGE_KEY = "student-profile-theme";
 const STUDENT_GOAL_STORAGE_KEY = "student-profile-goal";
 const DEFAULT_STUDENT_GOAL: StudentGoal = {
-  title: "本周主动运动",
+  title: "本周主动加练",
   weeklyTarget: 5,
   focusCategoryId: "all",
 };
@@ -53,10 +54,10 @@ type StudentGoal = {
 };
 
 function getInitialStudentTheme(): StudentTheme {
-  if (typeof window === "undefined") return "dark";
-  return window.localStorage.getItem(STUDENT_THEME_STORAGE_KEY) === "light"
-    ? "light"
-    : "dark";
+  if (typeof window === "undefined") return "light";
+  return window.localStorage.getItem(STUDENT_THEME_STORAGE_KEY) === "dark"
+    ? "dark"
+    : "light";
 }
 
 function getInitialStudentGoal(): StudentGoal {
@@ -241,6 +242,17 @@ function getProjectPeriodLabel(project: Project) {
   if (project.limitPeriod === "weekly") return "本周";
   if (project.limitPeriod === "monthly") return "本月";
   return "当前目标";
+}
+
+function getTrendText(delta: number) {
+  if (delta > 0) return `+${delta}次`;
+  if (delta < 0) return `${delta}次`;
+  return "持平";
+}
+
+function getPercentileText(rank: number | string, total: number) {
+  if (typeof rank !== "number" || total <= 0) return "-";
+  return `前${Math.max(1, Math.round((rank / total) * 100))}%`;
 }
 
 function formatDurationSeconds(seconds: number) {
@@ -582,19 +594,19 @@ export function StudentProfile() {
           : "三项都在好状态，可以挑战更好成绩";
   const activityRings = [
     {
-      label: "参与度",
+      label: "学校要求",
       value: participationPercent,
       color: "#38bdf8",
       helper: `${weekAttemptTimes}/${WEEK_TARGET}次`,
     },
     {
-      label: "达标度",
+      label: "月度达标",
       value: standardPercent,
       color: "#a3e635",
       helper: `${monthTimes}/${monthlyTarget}次`,
     },
     {
-      label: "个人目标",
+      label: "额外目标",
       value: goalPercent,
       color: "#fb7185",
       helper: `${goalCompleted}/${studentGoal.weeklyTarget}次`,
@@ -613,12 +625,14 @@ export function StudentProfile() {
     .sort((a, b) => getRecordTime(b) - getRecordTime(a))
     .slice(0, 3);
   const peerLeaderboard = useMemo(() => {
-    const gradeStudents = DUMMY_STUDENTS.filter((item) => item.grade === student.grade);
+    const classStudents = DUMMY_STUDENTS.filter(
+      (item) => item.grade === student.grade && item.className === student.className,
+    );
     const monthRecords = records.filter(
       (record) => !record.isInvalid && record.datetime.startsWith(selectedMonth),
     );
 
-    return gradeStudents
+    return classStudents
       .map((peer) => {
         const peerRecords = monthRecords.filter((record) => record.studentId === peer.id);
         const peerPassedRecords = peerRecords.filter((record) => record.isPassed);
@@ -641,9 +655,17 @@ export function StudentProfile() {
           b.latestRecordTime - a.latestRecordTime,
       )
       .map((item, index) => ({ ...item, rank: index + 1 }));
-  }, [records, selectedMonth, student.grade]);
+  }, [records, selectedMonth, student.className, student.grade]);
   const myLeaderboardRank =
     peerLeaderboard.find((item) => item.student.id === student.id)?.rank || "-";
+  const peerPositionText = getPercentileText(myLeaderboardRank, peerLeaderboard.length);
+  const growthTrendText = getTrendText(weekDelta);
+  const concernLevel =
+    weekLeft === 0 && standardLeft === 0
+      ? "状态良好"
+      : weekLeft <= 1 && standardLeft <= 3
+        ? "轻度提醒"
+        : "需要关注";
   const availableCategoryIds = new Set(
     assignedOpenProjects.map((project) => project.categoryId),
   );
@@ -684,18 +706,40 @@ export function StudentProfile() {
       icon: <Flame className="h-4 w-4" />,
     },
     {
-      title: "个人目标",
-      desc: goalCompleted >= studentGoal.weeklyTarget ? "个人目标完成" : `还差 ${goalLeft} 次`,
+      title: "额外目标",
+      desc: goalCompleted >= studentGoal.weeklyTarget ? "额外目标完成" : `还差 ${goalLeft} 次`,
       active: goalCompleted >= studentGoal.weeklyTarget,
       icon: <Target className="h-4 w-4" />,
     },
     thirdAchievement,
   ];
+  const familyActions = [
+    {
+      title: weekLeft > 0 ? "今晚提醒一次运动" : "保持本周节奏",
+      helper:
+        weekLeft > 0
+          ? `本周学校要求还差 ${weekLeft} 次，建议先安排 20-30 分钟。`
+          : "本周要求已完成，可以安排一次轻松恢复运动。",
+      icon: <BellRing className="h-4 w-4" />,
+    },
+    {
+      title: weakestAbility?.left ? `补 ${weakestAbility.name}` : "巩固优势项目",
+      helper: weakestAbility?.left
+        ? `${weakestAbility.name}还差 ${weakestAbility.left} 次，适合拆成 2 次完成。`
+        : `${strongestAbility?.name || "优势项目"}表现较好，保持低压力练习。`,
+      icon: <Target className="h-4 w-4" />,
+    },
+    {
+      title: "运动后看恢复",
+      helper: totalMinutes > 120 ? "本月运动量不少，注意拉伸、补水和睡眠。" : "运动后关注是否疲劳，避免临睡前高强度训练。",
+      icon: <HeartPulse className="h-4 w-4" />,
+    },
+  ];
 
   return (
     <div className={theme.page}>
       <Header
-        title="我的运动"
+        title="孩子运动"
         showBack={false}
         bg={theme.headerBg}
         titleClassName={theme.headerTitle}
@@ -719,37 +763,76 @@ export function StudentProfile() {
                 {getStudentLabel(student)} · 学号 {student.id}
               </div>
               <h1 className={`mt-2 text-[26px] font-bold leading-tight ${theme.titleText}`}>
-                {student.name}，今天运动了吗？
+                {student.name}本周体育情况
               </h1>
               <div className={`mt-2 flex items-center gap-2 text-[13px] ${theme.softText}`}>
-                {todayAllRecords.length > 0 ? (
+                {weekLeft === 0 ? (
                   <>
                     <CheckCircle2 className="h-4 w-4 text-lime-300" />
-                    今天已有 {getAttemptTimes(todayAllRecords)} 条运动记录
+                    本周学校要求已完成，继续保持节奏
                   </>
                 ) : (
                   <>
                     <Activity className="h-4 w-4 text-sky-300" />
-                    今天还没有运动记录
+                    本周还差 {weekLeft} 次，建议提前安排
                   </>
                 )}
               </div>
             </div>
 
-            <div className="relative shrink-0">
-              <input
-                type="month"
-                value={selectedMonth}
-                onChange={(event) => setSelectedMonth(event.target.value)}
-                className={theme.input}
-              />
-              <Calendar className={`pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 ${theme.inputIcon}`} />
+            <div className="shrink-0 text-right">
+              <div className="relative">
+                <input
+                  type="month"
+                  value={selectedMonth}
+                  onChange={(event) => setSelectedMonth(event.target.value)}
+                  className={theme.input}
+                />
+                <Calendar className={`pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 ${theme.inputIcon}`} />
+              </div>
+              <div
+                className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold ${
+                  concernLevel === "状态良好"
+                    ? studentTheme === "light"
+                      ? "bg-emerald-50 text-emerald-600"
+                      : "bg-lime-300/10 text-lime-300"
+                    : concernLevel === "轻度提醒"
+                      ? "bg-orange-50 text-orange-600"
+                      : "bg-rose-50 text-rose-500"
+                }`}
+              >
+                {concernLevel}
+              </div>
             </div>
+          </div>
+
+          <div className="mt-5 grid grid-cols-3 gap-2">
+            <ParentKpiCard
+              label="学校要求"
+              value={`${weekAttemptTimes}/${WEEK_TARGET}次`}
+              helper={weekLeft > 0 ? `还差 ${weekLeft} 次` : "已完成"}
+              tone="blue"
+              theme={studentTheme}
+            />
+            <ParentKpiCard
+              label="成长趋势"
+              value={growthTrendText}
+              helper="较上周完成次数"
+              tone={weekDelta >= 0 ? "green" : "orange"}
+              theme={studentTheme}
+            />
+            <ParentKpiCard
+              label="同班位置"
+              value={peerPositionText}
+              helper={`同班 ${peerLeaderboard.length} 人`}
+              tone="pink"
+              theme={studentTheme}
+            />
           </div>
 
           <div className="mt-5 grid grid-cols-[128px_1fr] gap-4">
             <ActivityRings
-              centerLabel="运动分"
+              centerLabel="综合完成"
               centerValue={ringScore}
               theme={studentTheme}
               rings={activityRings}
@@ -766,49 +849,24 @@ export function StudentProfile() {
           </div>
         </section>
 
-        <section className="grid grid-cols-[1fr_118px] gap-3">
-          <div className={theme.splitCard}>
-            <div className={`flex items-center gap-2 text-[13px] font-semibold ${theme.mutedText}`}>
-              {nextRecommendation.isComplete ? (
-                <CheckCircle2 className={`h-4 w-4 ${theme.actionAccent}`} />
-              ) : (
-                <Rocket className={`h-4 w-4 ${theme.actionAccent}`} />
-              )}
-              下一步推荐
-            </div>
-            <div className={`mt-2 truncate text-[20px] font-bold ${theme.titleText}`}>
-              {nextRecommendation.title}
-            </div>
-            <div className={`mt-1 text-[12px] ${theme.faintText}`}>
-              {nextRecommendation.helper}
-            </div>
-          </div>
-          <button
-            disabled={nextRecommendation.isComplete}
-            onClick={() => {
-              if (nextRecommendation.isComplete) return;
+        <ParentActionBlock
+          familyActions={familyActions}
+          nextRecommendation={nextRecommendation}
+          onStartAction={() => {
+            if (nextRecommendation.project) {
               navigate(getProjectActionUrl(nextRecommendation.project));
-            }}
-            className={
-              nextRecommendation.isComplete
-                ? `flex flex-col items-center justify-center rounded-[22px] px-3 shadow-sm ${
-                    studentTheme === "light"
-                      ? "bg-emerald-50 text-emerald-600"
-                      : "bg-lime-300/10 text-lime-300"
-                  }`
-                : theme.actionButton
+              return;
             }
-          >
-            {nextRecommendation.isComplete ? (
-              <CheckCircle2 className="h-5 w-5" />
-            ) : (
-              <Zap className="h-5 w-5" />
-            )}
-            <span className="mt-2 text-[15px] font-bold">
-              {nextRecommendation.isComplete ? "已完成" : "去完成"}
-            </span>
-          </button>
-        </section>
+            setSettingsOpen(true);
+          }}
+          reason={
+            weakestAbility?.left
+              ? `${weakestAbility.name}是当前短板，适合优先补齐。`
+              : "本周要求接近完成，适合保持低压力运动。"
+          }
+          theme={studentTheme}
+          themeStyles={theme}
+        />
 
         <PersonalGoalBlock
           completed={goalCompleted}
@@ -822,201 +880,47 @@ export function StudentProfile() {
           title={studentGoal.title.trim() || DEFAULT_STUDENT_GOAL.title}
         />
 
-        <section className={theme.card}>
-          <SectionTitle
-            icon={<Footprints className="h-4 w-4" />}
-            title="运动摘要"
-            theme={studentTheme}
-          />
-          <div className="mt-4 grid grid-cols-2 gap-2">
-            <GrowthCard
-              label="本月达标"
-              value={`${monthTimes}`}
-              helper={`还差 ${standardLeft} 次`}
-              bars={passedTrendBars}
-              tone={weekDelta >= 0 ? "green" : "orange"}
-              theme={studentTheme}
-            />
-            <GrowthCard
-              label="运动记录"
-              value={`${recordTimes}`}
-              helper={`${monthlyRecordDays} 天有记录`}
-              bars={recordTrendBars}
-              tone="pink"
-              theme={studentTheme}
-            />
-            <GrowthCard
-              label="运动时长"
-              value={`${totalMinutes}`}
-              helper="本月分钟"
-              bars={durationTrendBars}
-              tone="purple"
-              theme={studentTheme}
-            />
-            <GrowthCard
-              label="连续运动"
-              value={`${streakDays}`}
-              helper={`Lv.${streakLevel.level} ${streakLevel.title}`}
-              bars={streakTrendBars}
-              binaryBars
-              tone="green"
-              theme={studentTheme}
-            />
-          </div>
-        </section>
+        <ParentWeeklySummaryBlock
+          durationTrendBars={durationTrendBars}
+          monthTimes={monthTimes}
+          monthlyRecordDays={monthlyRecordDays}
+          passedTrendBars={passedTrendBars}
+          recordTimes={recordTimes}
+          recordTrendBars={recordTrendBars}
+          standardLeft={standardLeft}
+          streakDays={streakDays}
+          streakLevel={streakLevel}
+          streakTrendBars={streakTrendBars}
+          theme={studentTheme}
+          themeStyles={theme}
+          totalMinutes={totalMinutes}
+          weekAttemptTimes={weekAttemptTimes}
+          weekDelta={weekDelta}
+          weekLeft={weekLeft}
+          weeklyTarget={WEEK_TARGET}
+        />
 
-        <section className={theme.card}>
-          <SectionTitle
-            icon={<Award className="h-4 w-4" />}
-            title={abilityTitle}
-            theme={studentTheme}
-          />
-          <div className="mt-4 grid grid-cols-[178px_1fr] gap-3">
-            <AbilityRadar axes={abilityAxes} theme={studentTheme} />
-            <div className="flex flex-col justify-center gap-3">
-              <AbilityHint
-                label="优势"
-                value={strongestAbility?.name || "-"}
-                helper={`${Math.min(100, strongestAbility?.percent || 0)}%`}
-                tone="green"
-                theme={studentTheme}
-              />
-              <AbilityHint
-                label="待补"
-                value={weakestAbility?.name || "-"}
-                helper={weakestAbility?.left ? `还差 ${weakestAbility.left} 次` : "继续保持"}
-                tone="orange"
-                theme={studentTheme}
-              />
-              <AbilityHint
-                label="均衡"
-                value={`${balanceScore}%`}
-                helper={balanceHelper}
-                tone="blue"
-                theme={studentTheme}
-              />
-            </div>
-          </div>
-          <div className="mt-4 space-y-3">
-            {abilityAxes.map((item) => (
-              <AbilityProgress key={item.id} item={item} theme={studentTheme} />
-            ))}
-          </div>
-        </section>
+        <AbilityDevelopmentBlock
+          axes={abilityAxes}
+          balanceHelper={balanceHelper}
+          balanceScore={balanceScore}
+          selectedMonth={selectedMonth}
+          strongestAbility={strongestAbility}
+          theme={studentTheme}
+          themeStyles={theme}
+          weakestAbility={weakestAbility}
+        />
 
-        <section className={theme.card}>
-          <SectionTitle
-            icon={<Trophy className="h-4 w-4" />}
-            title="成就徽章"
-            theme={studentTheme}
-          />
-          <div className="mt-4 grid grid-cols-3 gap-2">
-            {achievements.map((item) => (
-              <AchievementBadge key={item.title} item={item} theme={studentTheme} />
-            ))}
-          </div>
-        </section>
-
-        <section className={theme.card}>
-          <SectionTitle
-            icon={<Medal className="h-4 w-4" />}
-            title="我的最好成绩"
-            theme={studentTheme}
-          />
-          <div className={`mt-3 ${theme.divider}`}>
-            {bestRecords.length === 0 ? (
-              <div className={theme.empty}>
-                完成一次运动后会生成最好成绩
-              </div>
-            ) : (
-              bestRecords.map((record) => {
-                const project = projects.find((item) => item.id === record.projectId);
-                const performance = getRecordPerformance(record, project);
-                return (
-                  <div key={record.id} className="flex items-center justify-between gap-3 py-3">
-                    <div className="min-w-0">
-                      <div className={theme.listTitle}>
-                        {project?.name || record.projectId}
-                      </div>
-                      <div className={theme.listMeta}>
-                        {project ? getCategoryName(project, categories) : "运动项目"} ·{" "}
-                        {format(new Date(record.datetime), "MM-dd")}
-                      </div>
-                    </div>
-                    <div className={theme.bestValue}>
-                      {performance.value}
-                      <span className={theme.unitText}>
-                        {performance.unit}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </section>
-
-        <section className={theme.card}>
-          <div className="flex items-center justify-between">
-            <SectionTitle
-              icon={<CheckCircle2 className="h-4 w-4" />}
-              title="最近运动"
-              theme={studentTheme}
-            />
-            <button
-              onClick={() => navigate("/records")}
-              className={`flex items-center gap-1 text-[13px] font-medium ${theme.actionAccent}`}
-            >
-              全部
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          </div>
-
-          <div className={`mt-3 ${theme.divider}`}>
-            {studentRecords.length === 0 ? (
-              <div className={theme.empty}>
-                当前月份暂无记录
-              </div>
-            ) : (
-              studentRecords.slice(0, 5).map((record) => {
-                const project = projects.find((item) => item.id === record.projectId);
-                const performance = getRecordPerformance(record, project);
-                return (
-                  <div
-                    key={record.id}
-                    className="flex items-center justify-between gap-3 py-3"
-                  >
-                    <div className="min-w-0">
-                      <div className={theme.listTitle}>
-                        {project?.name || record.projectId}
-                      </div>
-                      <div className={theme.listMeta}>
-                        {format(new Date(record.datetime), "MM-dd HH:mm")} ·{" "}
-                        {record.isPassed ? "完成" : "未达标"}
-                      </div>
-                    </div>
-                    <div className="shrink-0 text-right">
-                      <div className={theme.recentValue}>
-                        {performance.value}
-                        <span className={theme.unitText}>
-                          {performance.unit}
-                        </span>
-                      </div>
-                      <div className={`mt-1 text-[10px] ${theme.faintText}`}>
-                        +{record.totalTimes || (record.isPassed ? 1 : 0)}次
-                      </div>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </section>
-
-        <PeerLeaderboardSection
+        <ParentSportDetailsBlock
+          achievements={achievements}
+          bestRecords={bestRecords}
+          categories={categories}
           currentStudentId={student.id}
-          items={peerLeaderboard}
+          peerItems={peerLeaderboard}
           myRank={myLeaderboardRank}
+          onViewAllRecords={() => navigate("/records")}
+          projects={projects}
+          recentRecords={studentRecords}
           theme={studentTheme}
           themeStyles={theme}
         />
@@ -1052,6 +956,800 @@ type PeerLeaderboardItem = {
   rank: number;
 };
 
+type FamilyActionItem = {
+  title: string;
+  helper: string;
+  icon: ReactNode;
+};
+
+type AchievementItem = {
+  title: string;
+  desc: string;
+  active: boolean;
+  icon: ReactNode;
+};
+
+type NextRecommendation = {
+  isComplete: boolean;
+  project?: Project;
+  title: string;
+  helper: string;
+};
+
+type ParentDetailTab = "peer" | "highlights" | "best" | "recent";
+
+function ParentKpiCard({
+  label,
+  value,
+  helper,
+  tone,
+  theme,
+}: {
+  label: string;
+  value: string;
+  helper: string;
+  tone: "blue" | "green" | "orange" | "pink";
+  theme: StudentTheme;
+}) {
+  const isLight = theme === "light";
+  const toneClass = isLight
+    ? {
+        blue: "bg-blue-50 text-[#1677ff]",
+        green: "bg-emerald-50 text-emerald-600",
+        orange: "bg-orange-50 text-orange-600",
+        pink: "bg-rose-50 text-rose-500",
+      }[tone]
+    : {
+        blue: "bg-sky-300/10 text-sky-300",
+        green: "bg-lime-300/10 text-lime-300",
+        orange: "bg-orange-300/10 text-orange-300",
+        pink: "bg-rose-300/10 text-rose-300",
+      }[tone];
+
+  return (
+    <div className={`min-w-0 rounded-[18px] px-3 py-3 text-center ${toneClass}`}>
+      <div className="truncate text-[11px] font-bold opacity-75">{label}</div>
+      <div className="mt-2 truncate text-[20px] font-black leading-none">{value}</div>
+      <div className="mt-1 truncate text-[10px] font-medium opacity-70">{helper}</div>
+    </div>
+  );
+}
+
+function FamilyActionCard({
+  icon,
+  title,
+  helper,
+  theme,
+}: {
+  key?: string | number;
+  icon: ReactNode;
+  title: string;
+  helper: string;
+  theme: StudentTheme;
+}) {
+  const isLight = theme === "light";
+
+  return (
+    <div
+      className={`grid grid-cols-[38px_1fr] gap-3 rounded-[20px] p-3 ${
+        isLight ? "bg-gray-50" : "bg-white/[0.06]"
+      }`}
+    >
+      <div
+        className={`flex h-9 w-9 items-center justify-center rounded-2xl ${
+          isLight ? "bg-white text-[#1677ff]" : "bg-white/10 text-lime-300"
+        }`}
+      >
+        {icon}
+      </div>
+      <div className="min-w-0">
+        <div className={`text-[14px] font-bold ${isLight ? "text-gray-950" : "text-white"}`}>
+          {title}
+        </div>
+        <div className={`mt-1 text-[12px] leading-5 ${isLight ? "text-slate-500" : "text-white/55"}`}>
+          {helper}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ParentActionBlock({
+  familyActions,
+  nextRecommendation,
+  onStartAction,
+  reason,
+  theme,
+  themeStyles,
+}: {
+  familyActions: FamilyActionItem[];
+  nextRecommendation: NextRecommendation;
+  onStartAction: () => void;
+  reason: string;
+  theme: StudentTheme;
+  themeStyles: StudentThemeStyle;
+}) {
+  const isLight = theme === "light";
+
+  return (
+    <section id="parent-actions" className={themeStyles.card}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <SectionTitle
+            icon={<BellRing className="h-4 w-4" />}
+            title="家长今晚怎么帮"
+            theme={theme}
+          />
+          <div className={`mt-2 text-[12px] ${themeStyles.faintText}`}>
+            先给一个明确建议，后面再看详细数据
+          </div>
+        </div>
+        <span
+          className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-bold ${
+            nextRecommendation.isComplete
+              ? isLight
+                ? "bg-emerald-50 text-emerald-600"
+                : "bg-lime-300/10 text-lime-300"
+              : isLight
+                ? "bg-orange-50 text-orange-600"
+                : "bg-orange-300/10 text-orange-300"
+          }`}
+        >
+          {nextRecommendation.isComplete ? "放心保持" : "优先做这件事"}
+        </span>
+      </div>
+
+      <div
+        className={`mt-4 rounded-[24px] p-4 ${
+          isLight
+            ? "bg-gradient-to-br from-blue-50 to-white"
+            : "bg-gradient-to-br from-white/[0.1] to-white/[0.04]"
+        }`}
+      >
+        <div className={`text-[12px] font-bold ${themeStyles.mutedText}`}>
+          下一步建议
+        </div>
+        <div className={`mt-2 text-[22px] font-black leading-7 ${themeStyles.titleText}`}>
+          {nextRecommendation.title}
+        </div>
+        <div className={`mt-2 text-[13px] leading-5 ${themeStyles.softText}`}>
+          {nextRecommendation.helper}
+        </div>
+        <div className={`mt-3 rounded-2xl px-3 py-2 text-[12px] leading-5 ${
+          isLight ? "bg-white text-slate-600" : "bg-black/10 text-white/65"
+        }`}>
+          推荐原因：{reason}
+        </div>
+        <button
+          disabled={nextRecommendation.isComplete}
+          onClick={onStartAction}
+          className={`mt-4 inline-flex h-10 items-center justify-center gap-2 rounded-full px-4 text-[13px] font-bold transition-colors ${
+            nextRecommendation.isComplete
+              ? isLight
+                ? "bg-emerald-50 text-emerald-600"
+                : "bg-lime-300/10 text-lime-300"
+              : isLight
+                ? "bg-[#1677ff] text-white active:bg-[#0958d9]"
+                : "bg-lime-300 text-[#071006] active:bg-lime-400"
+          }`}
+        >
+          {nextRecommendation.isComplete ? (
+            <CheckCircle2 className="h-4 w-4" />
+          ) : (
+            <Zap className="h-4 w-4" />
+          )}
+          {nextRecommendation.isComplete
+            ? "已完成"
+            : nextRecommendation.project
+              ? "去完成"
+              : "制定目标"}
+        </button>
+      </div>
+
+      <div className="mt-3 grid gap-2">
+        {familyActions.slice(0, 3).map((item) => (
+          <FamilyActionCard
+            key={item.title}
+            icon={item.icon}
+            title={item.title}
+            helper={item.helper}
+            theme={theme}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ParentWeeklySummaryBlock({
+  durationTrendBars,
+  monthTimes,
+  monthlyRecordDays,
+  passedTrendBars,
+  recordTimes,
+  recordTrendBars,
+  standardLeft,
+  streakDays,
+  streakLevel,
+  streakTrendBars,
+  theme,
+  themeStyles,
+  totalMinutes,
+  weekAttemptTimes,
+  weekDelta,
+  weekLeft,
+  weeklyTarget,
+}: {
+  durationTrendBars: number[];
+  monthTimes: number;
+  monthlyRecordDays: number;
+  passedTrendBars: number[];
+  recordTimes: number;
+  recordTrendBars: number[];
+  standardLeft: number;
+  streakDays: number;
+  streakLevel: { level: number; title: string };
+  streakTrendBars: number[];
+  theme: StudentTheme;
+  themeStyles: StudentThemeStyle;
+  totalMinutes: number;
+  weekAttemptTimes: number;
+  weekDelta: number;
+  weekLeft: number;
+  weeklyTarget: number;
+}) {
+  const isLight = theme === "light";
+  const [showDetails, setShowDetails] = useState(false);
+  const summaryText =
+    weekLeft > 0
+      ? `本周还差 ${weekLeft} 次学校要求，建议提前安排一次轻松运动。`
+      : "本周学校要求已完成，接下来以保持节奏和恢复为主。";
+
+  return (
+    <section className={themeStyles.card}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <SectionTitle
+            icon={<Footprints className="h-4 w-4" />}
+            title="本周情况总结"
+            theme={theme}
+          />
+          <div className={`mt-2 text-[12px] ${themeStyles.faintText}`}>
+            先看结论，需要时再展开趋势
+          </div>
+        </div>
+        <span
+          className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-bold ${
+            weekLeft > 0
+              ? isLight
+                ? "bg-orange-50 text-orange-600"
+                : "bg-orange-300/10 text-orange-300"
+              : isLight
+                ? "bg-emerald-50 text-emerald-600"
+                : "bg-lime-300/10 text-lime-300"
+          }`}
+        >
+          {weekLeft > 0 ? "待补齐" : "已达标"}
+        </span>
+      </div>
+
+      <div className={`mt-4 rounded-[22px] px-4 py-3 text-[15px] font-bold leading-6 ${
+        isLight ? "bg-blue-50 text-slate-700" : "bg-white/[0.06] text-white/75"
+      }`}>
+        {summaryText}
+      </div>
+
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        <ParentSummaryTile
+          helper={weekLeft > 0 ? `还差 ${weekLeft} 次` : "已完成"}
+          label="学校要求"
+          theme={theme}
+          tone={weekLeft > 0 ? "orange" : "green"}
+          value={`${weekAttemptTimes}/${weeklyTarget}`}
+        />
+        <ParentSummaryTile
+          helper={standardLeft > 0 ? `月度还差 ${standardLeft} 次` : "月度达标"}
+          label="本月达标"
+          theme={theme}
+          tone={standardLeft > 0 ? "blue" : "green"}
+          value={`${monthTimes}次`}
+        />
+        <ParentSummaryTile
+          helper={`Lv.${streakLevel.level}`}
+          label="连续运动"
+          theme={theme}
+          tone="pink"
+          value={`${streakDays}天`}
+        />
+      </div>
+
+      <button
+        onClick={() => setShowDetails((value) => !value)}
+        className={`mt-4 flex w-full items-center justify-center gap-1 rounded-full py-2 text-[13px] font-bold ${
+          isLight
+            ? "bg-gray-50 text-[#1677ff] active:bg-blue-50"
+            : "bg-white/[0.06] text-lime-300 active:bg-white/[0.1]"
+        }`}
+      >
+        {showDetails ? "收起趋势数据" : "查看趋势数据"}
+        <ChevronRight className={`h-4 w-4 transition-transform ${showDetails ? "rotate-90" : ""}`} />
+      </button>
+
+      {showDetails && (
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <GrowthCard
+            label="本月达标"
+            value={`${monthTimes}`}
+            helper={`还差 ${standardLeft} 次`}
+            bars={passedTrendBars}
+            tone={weekDelta >= 0 ? "green" : "orange"}
+            theme={theme}
+          />
+          <GrowthCard
+            label="运动记录"
+            value={`${recordTimes}`}
+            helper={`${monthlyRecordDays} 天有记录`}
+            bars={recordTrendBars}
+            tone="pink"
+            theme={theme}
+          />
+          <GrowthCard
+            label="运动时长"
+            value={`${totalMinutes}`}
+            helper="本月分钟"
+            bars={durationTrendBars}
+            tone="purple"
+            theme={theme}
+          />
+          <GrowthCard
+            label="连续运动"
+            value={`${streakDays}`}
+            helper={`Lv.${streakLevel.level} ${streakLevel.title}`}
+            bars={streakTrendBars}
+            binaryBars
+            tone="green"
+            theme={theme}
+          />
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ParentSummaryTile({
+  helper,
+  label,
+  theme,
+  tone,
+  value,
+}: {
+  helper: string;
+  label: string;
+  theme: StudentTheme;
+  tone: "blue" | "green" | "orange" | "pink";
+  value: string;
+}) {
+  const isLight = theme === "light";
+  const toneClass = isLight
+    ? {
+        blue: "bg-blue-50 text-[#1677ff]",
+        green: "bg-emerald-50 text-emerald-600",
+        orange: "bg-orange-50 text-orange-600",
+        pink: "bg-rose-50 text-rose-500",
+      }[tone]
+    : {
+        blue: "bg-sky-300/10 text-sky-300",
+        green: "bg-lime-300/10 text-lime-300",
+        orange: "bg-orange-300/10 text-orange-300",
+        pink: "bg-rose-300/10 text-rose-300",
+      }[tone];
+
+  return (
+    <div className={`min-w-0 rounded-[18px] px-3 py-3 ${toneClass}`}>
+      <div className="truncate text-[11px] font-bold opacity-75">{label}</div>
+      <div className="mt-2 truncate text-[20px] font-black leading-none">{value}</div>
+      <div className="mt-2 truncate text-[10px] font-semibold opacity-70">{helper}</div>
+    </div>
+  );
+}
+
+function ParentSportDetailsBlock({
+  achievements,
+  bestRecords,
+  categories,
+  currentStudentId,
+  myRank,
+  onViewAllRecords,
+  peerItems,
+  projects,
+  recentRecords,
+  theme,
+  themeStyles,
+}: {
+  achievements: AchievementItem[];
+  bestRecords: SportRecord[];
+  categories: Category[];
+  currentStudentId: string;
+  myRank: number | string;
+  onViewAllRecords: () => void;
+  peerItems: PeerLeaderboardItem[];
+  projects: Project[];
+  recentRecords: SportRecord[];
+  theme: StudentTheme;
+  themeStyles: StudentThemeStyle;
+}) {
+  const isLight = theme === "light";
+  const [activeTab, setActiveTab] = useState<ParentDetailTab>("peer");
+  const [showAllPeers, setShowAllPeers] = useState(false);
+  const visiblePeerItems = showAllPeers
+    ? peerItems
+    : getNearbyLeaderboardItems(peerItems, currentStudentId, 3);
+  const tabs: Array<{ id: ParentDetailTab; label: string }> = [
+    { id: "peer", label: "同伴" },
+    { id: "highlights", label: "亮点" },
+    { id: "best", label: "成绩" },
+    { id: "recent", label: "记录" },
+  ];
+
+  const renderRecordRows = (
+    recordsToRender: SportRecord[],
+    emptyText: string,
+    limit: number,
+    mode: "best" | "recent",
+  ) => {
+    if (recordsToRender.length === 0) {
+      return <div className={themeStyles.empty}>{emptyText}</div>;
+    }
+
+    return recordsToRender.slice(0, limit).map((record) => {
+      const project = projects.find((item) => item.id === record.projectId);
+      const performance = getRecordPerformance(record, project);
+
+      return (
+        <div key={record.id} className="flex items-center justify-between gap-3 py-3">
+          <div className="min-w-0">
+            <div className={themeStyles.listTitle}>
+              {project?.name || record.projectId}
+            </div>
+            <div className={themeStyles.listMeta}>
+              {mode === "best" ? (
+                <>
+                  {project ? getCategoryName(project, categories) : "运动项目"} ·{" "}
+                  {format(new Date(record.datetime), "MM-dd")}
+                </>
+              ) : (
+                <>
+                  {format(new Date(record.datetime), "MM-dd HH:mm")} ·{" "}
+                  {record.isPassed ? "完成" : "未达标"}
+                </>
+              )}
+            </div>
+          </div>
+          <div className="shrink-0 text-right">
+            <div className={mode === "best" ? themeStyles.bestValue : themeStyles.recentValue}>
+              {performance.value}
+              <span className={themeStyles.unitText}>{performance.unit}</span>
+            </div>
+            {mode === "recent" && (
+              <div className={`mt-1 text-[10px] ${themeStyles.faintText}`}>
+                +{record.totalTimes || (record.isPassed ? 1 : 0)}次
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    });
+  };
+
+  return (
+    <section className={themeStyles.card}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <SectionTitle
+            icon={<Trophy className="h-4 w-4" />}
+            title="运动详情"
+            theme={theme}
+          />
+          <div className={`mt-2 text-[12px] ${themeStyles.faintText}`}>
+            需要细看时，再切换查看
+          </div>
+        </div>
+        {activeTab === "recent" && (
+          <button
+            onClick={onViewAllRecords}
+            className={`flex items-center gap-1 text-[13px] font-bold ${themeStyles.actionAccent}`}
+          >
+            全部
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+
+      <div
+        className={`mt-4 grid grid-cols-4 gap-1 rounded-full p-1 ${
+          isLight ? "bg-gray-100" : "bg-white/[0.06]"
+        }`}
+      >
+        {tabs.map((tab) => {
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`h-9 rounded-full text-[12px] font-bold transition-colors ${
+                isActive
+                  ? isLight
+                    ? "bg-white text-[#1677ff] shadow-sm"
+                    : "bg-lime-300 text-[#071006]"
+                  : isLight
+                    ? "text-slate-500"
+                    : "text-white/55"
+              }`}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {activeTab === "peer" && (
+        <div className="mt-4">
+          <div className="mb-2 flex items-center justify-between">
+            <div className={`text-[12px] ${themeStyles.faintText}`}>
+              同班位置
+              <span className={`ml-2 text-[18px] font-black ${themeStyles.actionAccent}`}>
+                #{myRank}
+              </span>
+            </div>
+            {peerItems.length > 0 && (
+              <button
+                onClick={() => setShowAllPeers((value) => !value)}
+                className={`rounded-full px-3 py-1.5 text-[12px] font-bold ${
+                  isLight
+                    ? "bg-blue-50 text-[#1677ff] active:bg-blue-100"
+                    : "bg-white/10 text-lime-300 active:bg-white/15"
+                }`}
+              >
+                {showAllPeers ? "看附近" : "看全部"}
+              </button>
+            )}
+          </div>
+          <div className={themeStyles.divider}>
+            {visiblePeerItems.map((item) => {
+              const isCurrent = item.student.id === currentStudentId;
+              return (
+                <div
+                  key={item.student.id}
+                  className={`flex items-center gap-3 py-3 ${
+                    isCurrent
+                      ? isLight
+                        ? "rounded-2xl bg-blue-50 px-2"
+                        : "rounded-2xl bg-lime-300/10 px-2"
+                      : ""
+                  }`}
+                >
+                  <div
+                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[13px] font-bold ${
+                      item.rank === 1
+                        ? "bg-amber-300 text-amber-950"
+                        : isLight
+                          ? "bg-gray-100 text-gray-700"
+                          : "bg-white/10 text-white/70"
+                    }`}
+                  >
+                    {item.rank}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className={themeStyles.listTitle}>{item.student.name}</span>
+                      {isCurrent && (
+                        <span
+                          className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                            isLight ? "bg-white text-[#1677ff]" : "bg-lime-300 text-[#071006]"
+                          }`}
+                        >
+                          我
+                        </span>
+                      )}
+                    </div>
+                    <div className={themeStyles.listMeta}>
+                      {getStudentLabel(item.student)} · {item.recordDays} 天有记录
+                    </div>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <div className={themeStyles.bestValue}>
+                      {item.completed}
+                      <span className={themeStyles.unitText}>次</span>
+                    </div>
+                    <div className={`mt-1 text-[10px] ${themeStyles.faintText}`}>
+                      记录 {item.recordTimes} 条
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {activeTab === "highlights" && (
+        <div className="mt-4 grid grid-cols-3 gap-2">
+          {achievements.map((item) => (
+            <AchievementBadge key={item.title} item={item} theme={theme} />
+          ))}
+        </div>
+      )}
+
+      {activeTab === "best" && (
+        <div className={`mt-3 ${themeStyles.divider}`}>
+          {renderRecordRows(bestRecords, "完成一次运动后会生成最好成绩", 3, "best")}
+        </div>
+      )}
+
+      {activeTab === "recent" && (
+        <div className={`mt-3 ${themeStyles.divider}`}>
+          {renderRecordRows(recentRecords, "当前月份暂无记录", 5, "recent")}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function AbilityDevelopmentBlock({
+  axes,
+  balanceHelper,
+  balanceScore,
+  selectedMonth,
+  strongestAbility,
+  theme,
+  themeStyles,
+  weakestAbility,
+}: {
+  axes: AbilityItem[];
+  balanceHelper: string;
+  balanceScore: number;
+  selectedMonth: string;
+  strongestAbility?: AbilityItem;
+  theme: StudentTheme;
+  themeStyles: StudentThemeStyle;
+  weakestAbility?: AbilityItem;
+}) {
+  const isLight = theme === "light";
+  const [showRadar, setShowRadar] = useState(false);
+  const strongestPercent = Math.min(100, strongestAbility?.percent || 0);
+  const weakestLeft = weakestAbility?.left || 0;
+  const statusText = weakestLeft > 0 ? "轻度提醒" : "状态良好";
+  const summaryText =
+    strongestAbility && weakestAbility
+      ? `${strongestAbility.name}表现较好，${weakestAbility.name}${weakestLeft > 0 ? "需要优先补齐" : "保持稳定"}`
+      : "完成更多运动后会生成能力发展判断";
+  const statusClass =
+    weakestLeft > 0
+      ? isLight
+        ? "bg-orange-50 text-orange-600"
+        : "bg-orange-300/10 text-orange-300"
+      : isLight
+        ? "bg-emerald-50 text-emerald-600"
+        : "bg-lime-300/10 text-lime-300";
+
+  return (
+    <section className={themeStyles.card}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <SectionTitle
+            icon={<ShieldCheck className="h-4 w-4" />}
+            title="能力发展"
+            theme={theme}
+          />
+          <div className={`mt-2 text-[12px] ${themeStyles.faintText}`}>
+            看孩子的优势、重点提升方向和整体均衡度
+          </div>
+        </div>
+        <div
+          className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-bold ${
+            isLight ? "bg-blue-50 text-[#1677ff]" : "bg-white/10 text-lime-300"
+          }`}
+        >
+          {Number(selectedMonth.slice(5))}月
+        </div>
+      </div>
+
+      <div className={`mt-5 rounded-[20px] p-4 ${isLight ? "bg-gray-50" : "bg-white/[0.06]"}`}>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className={`text-[12px] font-bold ${themeStyles.mutedText}`}>
+              综合判断
+            </div>
+            <div className={`mt-2 text-[18px] font-black leading-6 ${themeStyles.titleText}`}>
+              {summaryText}
+            </div>
+          </div>
+          <span className={`shrink-0 rounded-full px-3 py-2 text-[12px] font-bold ${statusClass}`}>
+            {statusText}
+          </span>
+        </div>
+      </div>
+
+      <div className="mt-4 grid grid-cols-3 gap-2">
+        <AbilityResultCard
+          label="优势"
+          value={strongestAbility?.name || "-"}
+          helper={`完成 ${strongestPercent}%`}
+          tone="green"
+          theme={theme}
+        />
+        <AbilityResultCard
+          label="重点提升"
+          value={weakestAbility?.name || "-"}
+          helper={weakestLeft > 0 ? `还差 ${weakestLeft} 次` : "继续保持"}
+          tone="orange"
+          theme={theme}
+        />
+        <AbilityResultCard
+          label="均衡度"
+          value={`${balanceScore}%`}
+          helper={balanceHelper}
+          tone="blue"
+          theme={theme}
+        />
+      </div>
+
+      <button
+        onClick={() => setShowRadar((value) => !value)}
+        className={`mt-4 flex w-full items-center justify-center gap-1 rounded-full py-2 text-[13px] font-bold ${
+          isLight
+            ? "bg-gray-50 text-[#1677ff] active:bg-blue-50"
+            : "bg-white/[0.06] text-lime-300 active:bg-white/[0.1]"
+        }`}
+      >
+        {showRadar ? "收起能力图" : "查看能力图"}
+        <ChevronRight className={`h-4 w-4 transition-transform ${showRadar ? "rotate-90" : ""}`} />
+      </button>
+
+      {showRadar && (
+        <div className={`mt-4 rounded-[24px] p-4 ${isLight ? "bg-gray-50" : "bg-white/[0.06]"}`}>
+          <AbilityRadar axes={axes} theme={theme} />
+        </div>
+      )}
+    </section>
+  );
+}
+
+function AbilityResultCard({
+  label,
+  value,
+  helper,
+  tone,
+  theme,
+}: {
+  label: string;
+  value: string;
+  helper: string;
+  tone: "green" | "orange" | "blue";
+  theme: StudentTheme;
+}) {
+  const isLight = theme === "light";
+  const toneClass = isLight
+    ? {
+        green: "bg-emerald-50 text-emerald-600",
+        orange: "bg-orange-50 text-orange-600",
+        blue: "bg-blue-50 text-[#1677ff]",
+      }[tone]
+    : {
+        green: "bg-lime-300/10 text-lime-300",
+        orange: "bg-orange-300/10 text-orange-300",
+        blue: "bg-sky-300/10 text-sky-300",
+      }[tone];
+
+  return (
+    <div className={`min-w-0 rounded-[20px] px-3 py-4 ${toneClass}`}>
+      <div className="truncate text-[11px] font-bold opacity-80">{label}</div>
+      <div className="mt-2 truncate text-[19px] font-black leading-none">{value}</div>
+      <div className="mt-2 truncate text-[11px] font-semibold opacity-75">{helper}</div>
+    </div>
+  );
+}
+
 function PersonalGoalBlock({
   completed,
   focusName,
@@ -1080,7 +1778,7 @@ function PersonalGoalBlock({
       <div className="flex items-start justify-between gap-3">
         <SectionTitle
           icon={<Target className="h-4 w-4" />}
-          title="我的目标"
+          title="额外目标"
           theme={theme}
         />
         <button
@@ -1089,7 +1787,7 @@ function PersonalGoalBlock({
             isLight ? "bg-blue-50 text-[#1677ff]" : "bg-white/10 text-lime-300"
           }`}
         >
-          设置目标
+          制定目标
         </button>
       </div>
 
@@ -1115,7 +1813,7 @@ function PersonalGoalBlock({
       </div>
 
       <div className={`mt-3 ${themeStyles.quietPanel}`}>
-        {left > 0 ? `还差 ${left} 次完成自己的目标` : "目标已经完成，可以继续挑战更高目标"}
+        {left > 0 ? `还差 ${left} 次完成额外目标` : "额外目标已经完成，注意恢复和睡眠"}
       </div>
     </section>
   );
@@ -1144,8 +1842,8 @@ function PeerLeaderboardSection({
     <section className={themeStyles.card}>
       <div className="flex items-start justify-between gap-3">
         <SectionTitle
-          icon={<Trophy className="h-4 w-4" />}
-          title="同伴排行"
+          icon={<Users className="h-4 w-4" />}
+          title="同伴对比"
           theme={theme}
         />
         <div className="flex shrink-0 items-start gap-2">
@@ -1163,7 +1861,7 @@ function PeerLeaderboardSection({
             </button>
           )}
           <div className={`text-right text-[12px] ${themeStyles.faintText}`}>
-            我的排名
+            同班位置
             <div className={`mt-0.5 text-[18px] font-bold leading-none ${themeStyles.actionAccent}`}>
               #{myRank}
             </div>
@@ -1355,9 +2053,10 @@ function RingLegend({
 function AbilityRadar({ axes, theme }: { axes: AbilityItem[]; theme: StudentTheme }) {
   const normalizedAxes = axes;
   const isLight = theme === "light";
-  const center = 90;
-  const radius = 54;
-  const labelRadius = 70;
+  const viewSize = 224;
+  const center = viewSize / 2;
+  const radius = 74;
+  const labelRadius = 92;
   const axisCount = normalizedAxes.length;
   const getPoint = (index: number, scale = 1, baseRadius = radius) => {
     const angle = -Math.PI / 2 + (index * Math.PI * 2) / axisCount;
@@ -1380,8 +2079,8 @@ function AbilityRadar({ axes, theme }: { axes: AbilityItem[]; theme: StudentThem
   if (normalizedAxes.length === 0) {
     return (
       <div
-        className={`flex h-[178px] w-[178px] items-center justify-center rounded-[20px] text-[12px] ${
-          isLight ? "bg-gray-50 text-gray-400" : "bg-white/[0.06] text-white/40"
+        className={`mx-auto flex h-[224px] w-[224px] items-center justify-center rounded-[24px] text-[12px] ${
+          isLight ? "bg-white text-gray-400" : "bg-black/10 text-white/40"
         }`}
       >
         暂无类别
@@ -1390,8 +2089,8 @@ function AbilityRadar({ axes, theme }: { axes: AbilityItem[]; theme: StudentThem
   }
 
   return (
-    <div className={`relative h-[178px] w-[178px] rounded-[20px] ${isLight ? "bg-gray-50" : "bg-white/[0.06]"}`}>
-      <svg viewBox="0 0 180 180" className="h-full w-full">
+    <div className="relative mx-auto h-[224px] w-[224px]">
+      <svg viewBox={`0 0 ${viewSize} ${viewSize}`} className="h-full w-full">
         {[0.25, 0.5, 0.75, 1].map((scale) => {
           const points = axisPoints
             .map((point) => `${center + (point.x - center) * scale},${center + (point.y - center) * scale}`)
@@ -1445,8 +2144,8 @@ function AbilityRadar({ axes, theme }: { axes: AbilityItem[]; theme: StudentThem
               isLight ? "bg-white text-gray-700" : "bg-[#262a32] text-white"
             }`}
             style={{
-              left: `${(labelPoint.x / 180) * 100}%`,
-              top: `${(labelPoint.y / 180) * 100}%`,
+              left: `${(labelPoint.x / viewSize) * 100}%`,
+              top: `${(labelPoint.y / viewSize) * 100}%`,
             }}
           >
             {axis.name.replace("类", "")}
@@ -1719,7 +2418,7 @@ function StudentSettingsSheet({
       >
         <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-gray-300/70" />
         <div className="flex items-center justify-between">
-          <h2 className="text-[20px] font-bold">设置</h2>
+          <h2 className="text-[20px] font-bold">家长设置</h2>
           <button
             aria-label="关闭设置"
             onClick={onClose}
@@ -1771,7 +2470,7 @@ function StudentSettingsSheet({
               isLight ? "text-gray-500" : "text-white/55"
             }`}
           >
-            自定义目标
+            额外目标
           </div>
           <label className="mt-3 block">
             <span

@@ -54,7 +54,7 @@ export function Layout() {
           />
           <TabItem
             icon={<User className="w-6 h-6" />}
-            label="学生"
+            label="孩子"
             active={location.pathname === "/student"}
             onClick={() => navigate("/student")}
           />

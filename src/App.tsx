@@ -23,6 +23,7 @@ import { StatsGrade } from "./pages/stats/StatsGrade";
 import { StatsClass } from "./pages/stats/StatsClass";
 import { StatsProject } from "./pages/stats/StatsProject";
 import { StatsProjectDetail } from "./pages/stats/StatsProjectDetail";
+import { StatsBigScreen } from "./pages/stats/StatsBigScreen";
 import { Layout } from "./components/Layout";
 import { TopLevelGuard } from "./components/TopLevelGuard";
 
@@ -30,6 +31,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        <Route path="/big-screen" element={<StatsBigScreen />} />
         <Route element={<Layout />}>
           <Route path="/" element={<Home />} />
           <Route path="/registered" element={<RegisteredProjects />} />
